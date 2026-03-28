@@ -80,8 +80,8 @@ function resetGame() {
   areaSystem = new AreaSystem();
   ranksEverObtained = new Set();
   totalRolls = 0;
-  applyAreaTheme(areaSystem.getActiveArea().theme);
   refreshAll();
+  applyAreaTheme(areaSystem.getActiveArea().theme);
   showToast('Game reset. Good luck! 🎲');
 }
 
