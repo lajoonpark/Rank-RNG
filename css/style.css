@@ -800,3 +800,154 @@ header p.subtitle {
   0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
   100% { transform: translate(calc(-50% + var(--px, 0px)), calc(-50% + var(--py, 0px))) scale(0); opacity: 0; }
 }
+
+/* ============================================================
+   Developer Mode Panel
+   Fixed overlay — only visible when isDevMode is true
+   ============================================================ */
+
+.dev-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 310px;
+  background: var(--bg-panel);
+  border: 1px solid #ff5252;
+  border-radius: var(--radius);
+  box-shadow: 0 0 24px rgba(255, 82, 82, 0.25), var(--shadow);
+  z-index: 1000;
+  font-size: 0.88rem;
+}
+
+.dev-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 82, 82, 0.12);
+  border-bottom: 1px solid #ff5252;
+  border-radius: var(--radius) var(--radius) 0 0;
+  font-weight: 700;
+  color: #ff5252;
+  letter-spacing: 0.5px;
+}
+
+.dev-panel-header button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+
+.dev-panel-header button:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dev-panel-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Individual control block */
+.dev-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dev-control label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* Inline row: input + button side-by-side */
+.dev-row {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.dev-row input[type="number"],
+.dev-row select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+
+.dev-row select option {
+  background: var(--bg-card);
+}
+
+.dev-control input[type="range"] {
+  width: 100%;
+  accent-color: #ff5252;
+  cursor: pointer;
+}
+
+/* Buttons inside the dev panel */
+.dev-row button,
+.dev-control > button {
+  background: linear-gradient(135deg, #ff5252, #d32f2f);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.dev-row button:hover,
+.dev-control > button:hover {
+  opacity: 0.82;
+}
+
+/* Guaranteed-rare toggle row */
+.dev-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dev-toggle label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.dev-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff5252;
+  cursor: pointer;
+}
+
+/* Responsive: move panel to bottom-centre on narrow screens */
+@media (max-width: 750px) {
+  .dev-panel {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: calc(100% - 32px);
+    max-width: 360px;
+  }
+}
+

@@ -66,12 +66,17 @@ const RANKS = [
 /**
  * Compute normalized drop chances for all ranks at the given luck level.
  *
+ * An optional `pool` parameter allows restricting the roll to a subset of
+ * RANKS (e.g. the Guaranteed Rare+ feature uses only rarityLevel >= 4).
+ * Returned indices align with the provided pool array.
+ *
  * @param {number} luck – player luck level (0 = base, higher = more rare drops)
+ * @param {object[]} [pool=RANKS] – subset of RANKS to use; defaults to all ranks
  * @returns {{ id: string, chance: number }[]} per-rank chance percentages summing to 100
  */
-function buildAdjustedChances(luck) {
+function buildAdjustedChances(luck, pool = RANKS) {
   // Step 1: Apply luck multiplier — higher rarityLevel gets a larger boost
-  const adjusted = RANKS.map((r) => ({
+  const adjusted = pool.map((r) => ({
     id: r.id,
     raw: r.baseChance * (1 + luck * r.rarityLevel * 0.02),
   }));
@@ -85,12 +90,70 @@ function buildAdjustedChances(luck) {
 }
 
 /**
+ * Return a safe snapshot of developer-mode configuration.
+ * Reads the globals set by devmode.js; returns safe defaults when that file
+ * is not loaded (so rng.js never throws a ReferenceError).
+ *
+ * @returns {{ active: boolean, forcedRank: string|null, luckMult: number, guaranteedRare: boolean }}
+ */
+function _getDevConfig() {
+  /* eslint-disable no-undef */
+  return {
+    active:        typeof isDevMode          !== 'undefined' && isDevMode,
+    forcedRank:    typeof devForcedRank      !== 'undefined' ? devForcedRank      : null,
+    luckMult:      typeof devLuckMultiplier  !== 'undefined' ? devLuckMultiplier  : 1,
+    guaranteedRare: typeof devGuaranteedRare !== 'undefined' && devGuaranteedRare,
+  };
+  /* eslint-enable no-undef */
+}
+
+/**
  * Perform a single weighted-random roll using luck-adjusted chances.
+ *
+ * When developer mode is active (isDevMode === true) the following overrides
+ * are applied in priority order:
+ *   1. devForcedRank    – always return a specific rank by ID
+ *   2. devGuaranteedRare – restrict the roll pool to rarityLevel >= 4
+ *   3. devLuckMultiplier – multiply the effective luck before normalization
  *
  * @param {number} luck – current player luck level
  * @returns {object} the rank object that was rolled (from RANKS)
  */
 function rollItem(luck = 0) {
+  const dev = _getDevConfig();
+
+  if (dev.active) {
+    // 1. Forced rank — return it immediately, bypassing RNG entirely
+    if (dev.forcedRank) {
+      const forced = RANKS.find((r) => r.id === dev.forcedRank);
+      if (forced) return forced;
+    }
+
+    const effectiveLuck = luck * dev.luckMult;
+
+    // 2. Guaranteed Rare+ — restrict pool to rarityLevel >= 4
+    if (dev.guaranteedRare) {
+      const rarePool = RANKS.filter((r) => r.rarityLevel >= 4);
+      const chances = buildAdjustedChances(effectiveLuck, rarePool);
+      let roll = Math.random() * 100;
+      for (let i = 0; i < rarePool.length; i++) {
+        roll -= chances[i].chance;
+        if (roll <= 0) return rarePool[i];
+      }
+      return rarePool[rarePool.length - 1]; // floating-point safety fallback
+    }
+
+    // 3. Luck multiplier only — standard distribution with boosted luck
+    const chances = buildAdjustedChances(effectiveLuck);
+    let roll = Math.random() * 100;
+    for (let i = 0; i < chances.length; i++) {
+      roll -= chances[i].chance;
+      if (roll <= 0) return RANKS[i];
+    }
+    return RANKS[0];
+  }
+
+  // Normal (non-dev) roll path
   const chances = buildAdjustedChances(luck);
 
   // Pick a random point in [0, 100) and walk the cumulative distribution
