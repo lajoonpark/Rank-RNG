@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rank RNG — Incremental</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- ── Header ──────────────────────────────────────────── -->
+    <header>
+      <h1>⚔ Rank RNG</h1>
+      <p class="subtitle">Roll for glory. Collect ranks. Ascend.</p>
+    </header>
+
+    <!-- ── Stats bar ─────────────────────────────────────────── -->
+    <div class="stats-bar">
+      <div class="stat-chip">
+        <span class="stat-label">💰 Coins</span>
+        <span class="stat-value" id="currency">0</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-label">🎲 Rolls</span>
+        <span class="stat-value" id="stats-rolls">0</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-label">📦 Items</span>
+        <span class="stat-value" id="total-items">0</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-label">💎 Inv. Value</span>
+        <span class="stat-value" id="total-value">0</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-label">🏆 Total Earned</span>
+        <span class="stat-value" id="stats-earned">0</span>
+      </div>
+    </div>
+
+    <!-- ── Main grid ──────────────────────────────────────────── -->
+    <div class="main-grid">
+
+      <!-- Roll panel (full width) -->
+      <section class="panel roll-panel" aria-label="Roll">
+        <h2>Roll</h2>
+
+        <div id="roll-result-card" class="roll-result-card">
+          <div id="roll-result-name">Press Roll!</div>
+        </div>
+
+        <div class="roll-btn-wrap">
+          <button id="roll-btn" aria-label="Roll for a rank">
+            <span id="roll-btn-label">Roll</span>
+          </button>
+          <div class="cooldown-track">
+            <div id="cooldown-bar"></div>
+          </div>
+          <button id="auto-roll-toggle" aria-label="Toggle auto-roll">
+            ▶ Start Auto-Roll
+          </button>
+        </div>
+      </section>
+
+      <!-- Inventory panel -->
+      <section class="panel inventory-panel" aria-label="Inventory">
+        <h2>Inventory</h2>
+        <div id="inventory-list">
+          <p class="empty-msg">No items yet. Start rolling!</p>
+        </div>
+      </section>
+
+      <!-- Upgrade panel -->
+      <section class="panel upgrade-panel" aria-label="Upgrades">
+        <h2>Upgrades</h2>
+        <div id="upgrade-list"></div>
+      </section>
+
+      <!-- Odds section (collapsible) -->
+      <div class="odds-section-wrap">
+        <button class="odds-toggle-btn" id="odds-toggle">▼ Show Drop Odds</button>
+        <div id="odds-section">
+          <table id="odds-table" aria-label="Drop chance table">
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer controls -->
+      <div class="footer-controls">
+        <button class="ctrl-btn" id="save-btn">💾 Save</button>
+        <button class="ctrl-btn danger" id="reset-btn">🗑 Reset</button>
+      </div>
+
+    </div><!-- /.main-grid -->
+
+  </div><!-- /.wrapper -->
+
+  <!-- Toast notification -->
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- ── Scripts (load order matters) ──────────────────────── -->
+  <script src="js/rng.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/inventory.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
