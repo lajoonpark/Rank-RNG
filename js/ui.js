@@ -29,8 +29,7 @@ const UI = {
   currency: null,
   totalValue: null,
   totalItems: null,
-  rollResult: null,
-  rollResultCard: null,
+  rollResultContainer: null,
   rollBtn: null,
   rollBtnLabel: null,
   inventoryList: null,
@@ -48,8 +47,7 @@ function initUI() {
   UI.currency = document.getElementById('currency');
   UI.totalValue = document.getElementById('total-value');
   UI.totalItems = document.getElementById('total-items');
-  UI.rollResult = document.getElementById('roll-result-name');
-  UI.rollResultCard = document.getElementById('roll-result-card');
+  UI.rollResultContainer = document.getElementById('roll-result-container');
   UI.rollBtn = document.getElementById('roll-btn');
   UI.rollBtnLabel = document.getElementById('roll-btn-label');
   UI.inventoryList = document.getElementById('inventory-list');
@@ -123,34 +121,28 @@ function applyRankColorToEl(el, color) {
 }
 
 /**
- * Display a single roll result in the roll result card.
+ * Create and return a single roll result card DOM element for the given rank.
  * Handles plain hex colours and special animated effects.
  * Adds an extra glow animation for rarityLevel >= 10.
  *
  * @param {object} result – rank object from RANKS
+ * @returns {HTMLElement}
  */
-function displayRoll(result) {
-  const nameEl = UI.rollResult;
-  const cardEl = UI.rollResultCard;
-  if (!nameEl || !cardEl) return;
+function createRollCard(result) {
+  const cardEl = document.createElement('div');
+  cardEl.className = 'roll-result-card';
 
+  const nameEl = document.createElement('div');
+  nameEl.className = 'roll-result-name';
   nameEl.textContent = `${result.emoji} ${result.name}`;
-
-  // --- Clear previous effects ---
-  SPECIAL_COLOR_FX.forEach((fx) => {
-    nameEl.classList.remove(`fx-${fx}`);
-    cardEl.classList.remove(`fx-card-${fx}`);
-  });
-  cardEl.classList.remove('fx-card-ultra-rare');
+  cardEl.appendChild(nameEl);
 
   const isSpecial = SPECIAL_COLOR_FX.includes(result.color);
 
   if (isSpecial) {
     // Animated text effect
     nameEl.classList.add(`fx-${result.color}`);
-    // Animated card border/glow — remove competing inline styles first
-    cardEl.style.removeProperty('border-color');
-    cardEl.style.removeProperty('box-shadow');
+    // Animated card border/glow
     cardEl.style.setProperty('--rank-color', SPECIAL_COLOR_FALLBACKS[result.color]);
     cardEl.classList.add(`fx-card-${result.color}`);
   } else {
@@ -166,32 +158,28 @@ function displayRoll(result) {
     cardEl.classList.add('fx-card-ultra-rare');
   }
 
-  // Roll pop animation — force reflow to restart if already active
-  cardEl.classList.remove('roll-animate');
-  void cardEl.offsetWidth;
-  cardEl.classList.add('roll-animate');
+  return cardEl;
 }
 
 /**
- * Show the result of the most recent (or best) roll.
+ * Show all roll results from the current batch, one card per result.
  *
  * @param {object[]} rolledRanks – array of rank objects from this roll batch
  */
 function renderRollResult(rolledRanks) {
+  if (!UI.rollResultContainer) return;
   if (!rolledRanks || rolledRanks.length === 0) return;
 
-  // Pick the rarest rank from the batch to display (highest rarityLevel wins)
-  const best = rolledRanks.reduce((prev, cur) =>
-    cur.rarityLevel > prev.rarityLevel ? cur : prev
-  );
+  UI.rollResultContainer.replaceChildren();
 
-  displayRoll(best);
-
-  if (rolledRanks.length > 1) {
-    UI.rollResultCard.dataset.extra = `+${rolledRanks.length - 1} more`;
-  } else {
-    UI.rollResultCard.dataset.extra = '';
-  }
+  rolledRanks.forEach((result) => {
+    const card = createRollCard(result);
+    UI.rollResultContainer.appendChild(card);
+    // Trigger roll-pop animation after the element is in the DOM
+    requestAnimationFrame(() => {
+      card.classList.add('roll-animate');
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

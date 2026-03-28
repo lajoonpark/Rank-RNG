@@ -140,6 +140,14 @@ header p.subtitle {
   gap: 16px;
 }
 
+.roll-result-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
 .roll-result-card {
   background: var(--bg-card);
   border: 2px solid var(--border);
@@ -150,20 +158,7 @@ header p.subtitle {
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-.roll-result-card[data-extra]:not([data-extra=''])::after {
-  content: attr(data-extra);
-  position: absolute;
-  bottom: -10px;
-  right: 12px;
-  background: var(--bg-card2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  color: var(--text-muted);
-}
-
-#roll-result-name {
+.roll-result-name {
   font-size: 1.7rem;
   font-weight: 900;
   letter-spacing: 1px;
