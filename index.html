@@ -79,6 +79,36 @@
         <div id="upgrade-list"></div>
       </section>
 
+      <!-- Pity panel (full width) -->
+      <section class="panel pity-panel" aria-label="Pity System">
+        <h2>🎯 Pity System</h2>
+
+        <p class="pity-help-text">
+          All rolls count toward pity &nbsp;·&nbsp;
+          Pity awards only one guaranteed rank at a time.
+        </p>
+
+        <div class="pity-target-selector">
+          <span class="pity-selector-label">Target Rank:</span>
+          <div class="pity-rank-buttons" id="pity-rank-buttons">
+            <!-- Populated by initPityUI() -->
+          </div>
+        </div>
+
+        <div class="pity-progress-area" id="pity-progress-area">
+          <div class="pity-progress-header">
+            <span class="pity-target-name" id="pity-target-name">No target selected</span>
+            <span class="pity-progress-text" id="pity-progress-text">— / —</span>
+          </div>
+          <div class="pity-bar-track" aria-label="Pity progress bar">
+            <div id="pity-bar" class="pity-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+          <div class="pity-footer">
+            <span class="pity-remaining-text" id="pity-remaining-text">Select a rank above to track pity progress.</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Odds section (collapsible) -->
       <div class="odds-section-wrap">
         <button class="odds-toggle-btn" id="odds-toggle">▼ Show Drop Odds</button>
@@ -156,6 +186,7 @@
   <script src="js/rng.js"></script>
   <script src="js/player.js"></script>
   <script src="js/inventory.js"></script>
+  <script src="js/pity.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/cutscene.js"></script>

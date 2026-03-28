@@ -18,6 +18,7 @@ const AUTO_ROLL_TICK_MS = 100; // how often the auto-roll scheduler runs
 // ---------------------------------------------------------------------------
 let player = null;
 let inventory = null;
+let pitySystem = null;
 let totalRolls = 0;
 
 let rollOnCooldown = false;
@@ -33,6 +34,7 @@ function saveGame() {
     player: player.toJSON(),
     inventory: inventory.toJSON(),
     totalRolls,
+    pity: pitySystem ? pitySystem.toJSON() : null,
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   showToast('Game saved! 💾');
@@ -46,6 +48,7 @@ function loadGame() {
     player = new PlayerState(data.player);
     inventory = new Inventory(data.inventory);
     totalRolls = data.totalRolls ?? 0;
+    pitySystem = new PitySystem(data.pity ?? null);
     return true;
   } catch (e) {
     console.warn('Failed to load save:', e);
@@ -59,6 +62,7 @@ function resetGame() {
   stopAutoRoll();
   player = new PlayerState();
   inventory = new Inventory();
+  pitySystem = new PitySystem();
   totalRolls = 0;
   refreshAll();
   showToast('Game reset. Good luck! 🎲');
@@ -82,28 +86,39 @@ function doRoll() {
   if (rollOnCooldown) return;
 
   const count = player.rollsPerClick;
+
+  // Process all rolls through the pity system.
+  // Returns { rank, isPityReward }[] — one entry per roll.
+  // If no pity target is selected the pity system simply forwards to rollItem.
+  const results = pitySystem.processRolls(count, player.upgrades.luck);
+
   const rolledRanks = [];
-
-  for (let i = 0; i < count; i++) {
-    const rank = rollItem(player.upgrades.luck);
-
+  for (const { rank, isPityReward } of results) {
     // Apply bonus multiplier to Rare and above (rarityLevel >= 4)
     const multiplier = rank.rarityLevel >= 4 ? player.bonusMultiplier : 1;
     const value = Math.ceil(rank.value * multiplier);
 
     inventory.addRank(rank, value);
     player.earn(value + CURRENCY_PER_ROLL);
+    // rolledRanks holds plain rank objects — used for the cutscene pipeline which
+    // needs only rank metadata.  The full results array (with isPityReward) is
+    // passed directly to renderRollResult for badge rendering.
     rolledRanks.push(rank);
+
+    if (isPityReward) {
+      showToast(`🎯 Pity triggered! Guaranteed ${rank.emoji} ${rank.name}!`);
+    }
   }
 
   totalRolls += count;
 
   // Update UI
-  renderRollResult(rolledRanks);
+  renderRollResult(results);
   renderCurrency(player);
   renderInventory(inventory);
   renderStats({ totalRolls, totalEarned: player.totalEarned });
   renderUpgrades(player);
+  renderPity(pitySystem);
 
   // Queue cutscenes for any rare ranks that have one configured.
   // Stop auto-roll first so it does not continue running in the background
@@ -226,6 +241,7 @@ function refreshAll() {
   renderOdds(player.upgrades.luck);
   setRollButtonEnabled(true, player.rollsPerClick);
   setAutoRollBtnLabel(autoRollRunning);
+  renderPity(pitySystem);
 }
 
 // ---------------------------------------------------------------------------
@@ -283,9 +299,20 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!loaded) {
     player = new PlayerState();
     inventory = new Inventory();
+    pitySystem = new PitySystem();
   }
 
   attachEvents();
+
+  // Wire pity rank-selector; toggling an already-active button deselects it
+  if (typeof initPityUI === 'function') {
+    initPityUI((rankId) => {
+      const newTarget = pitySystem.targetId === rankId ? null : rankId;
+      pitySystem.setTarget(newTarget);
+      renderPity(pitySystem);
+    });
+  }
+
   refreshAll();
 
   if (loaded) showToast('Save loaded! 🎮');

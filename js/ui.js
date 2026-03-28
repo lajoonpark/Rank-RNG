@@ -336,16 +336,35 @@ function applyRarityAnimation(cardEl, result) {
 /**
  * Show all roll results from the current batch, one card per result.
  *
- * @param {object[]} rolledRanks – array of rank objects from this roll batch
+ * Accepts either plain rank objects or { rank, isPityReward } objects.
+ * When isPityReward is true the card receives a "✨ PITY" badge.
+ *
+ * @param {Array} rolledItems – rank objects or { rank, isPityReward } objects
  */
-function renderRollResult(rolledRanks) {
+function renderRollResult(rolledItems) {
   if (!UI.rollResultContainer) return;
-  if (!rolledRanks || rolledRanks.length === 0) return;
+  if (!rolledItems || rolledItems.length === 0) return;
 
   UI.rollResultContainer.replaceChildren();
 
-  rolledRanks.forEach((result) => {
+  // Normalise: support both plain rank objects and { rank, isPityReward } shape
+  const items = rolledItems.map((item) =>
+    item && typeof item === 'object' && 'rank' in item
+      ? { rank: item.rank, isPityReward: item.isPityReward ?? false }
+      : { rank: item, isPityReward: false }
+  );
+
+  items.forEach(({ rank: result, isPityReward }) => {
     const card = createRollCard(result);
+
+    if (isPityReward) {
+      card.classList.add('pity-reward-card');
+      const badge = document.createElement('div');
+      badge.className = 'pity-badge';
+      badge.textContent = '✨ PITY';
+      card.appendChild(badge);
+    }
+
     UI.rollResultContainer.appendChild(card);
     // Trigger roll animation after the element is in the DOM
     requestAnimationFrame(() => applyRarityAnimation(card, result));
@@ -495,4 +514,101 @@ function setAutoRollBtnLabel(running) {
     ? '⏹ Stop Auto-Roll'
     : '▶ Start Auto-Roll';
   UI.autoRollToggleBtn.classList.toggle('active', running);
+}
+
+// ---------------------------------------------------------------------------
+// Pity System UI
+// ---------------------------------------------------------------------------
+
+/**
+ * Initialise the pity rank-selector buttons.
+ * Call once after the DOM is ready and pitySystem has been created.
+ *
+ * @param {function} onTargetChange – callback(rankId: string|null) invoked
+ *                                    when the player selects or deselects a rank
+ */
+function initPityUI(onTargetChange) {
+  const container = document.getElementById('pity-rank-buttons');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  PITY_CONFIG.forEach((config) => {
+    const btn = document.createElement('button');
+    btn.className = 'pity-rank-btn';
+    btn.dataset.rankId = config.id;
+    btn.title = `Guarantee in ${config.threshold.toLocaleString()} rolls`;
+
+    // Label: emoji + name + subtle threshold hint
+    btn.innerHTML =
+      `<span class="pity-btn-name">${config.emoji} ${config.name}</span>` +
+      `<span class="pity-btn-req">${config.threshold.toLocaleString()}</span>`;
+
+    btn.addEventListener('click', () => onTargetChange(config.id));
+    container.appendChild(btn);
+  });
+}
+
+/**
+ * Refresh the pity progress display to match the current PitySystem state.
+ * Safe to call with a null pitySystem (renders a blank state).
+ *
+ * @param {PitySystem|null} pitySystem
+ */
+function renderPity(pitySystem) {
+  const targetNameEl   = document.getElementById('pity-target-name');
+  const progressTextEl = document.getElementById('pity-progress-text');
+  const remainingEl    = document.getElementById('pity-remaining-text');
+  const barEl          = document.getElementById('pity-bar');
+  const progressArea   = document.getElementById('pity-progress-area');
+
+  if (!targetNameEl || !barEl) return;
+
+  // Sync button active-state highlights
+  document.querySelectorAll('.pity-rank-btn').forEach((btn) => {
+    const isActive = pitySystem && btn.dataset.rankId === pitySystem.targetId;
+    btn.classList.toggle('active', Boolean(isActive));
+  });
+
+  if (!pitySystem) {
+    targetNameEl.textContent  = 'No target selected';
+    progressTextEl.textContent = '— / —';
+    remainingEl.textContent   = 'Select a rank above to track pity progress.';
+    barEl.style.width         = '0%';
+    barEl.setAttribute('aria-valuenow', '0');
+    progressArea.classList.remove('pity-close', 'pity-charged');
+    return;
+  }
+
+  const config   = pitySystem.getTargetConfig();
+  const progress = pitySystem.getTargetProgress();
+
+  if (!config) {
+    targetNameEl.textContent  = 'No target selected';
+    progressTextEl.textContent = '— / —';
+    remainingEl.textContent   = 'Select a rank above to track pity progress.';
+    barEl.style.width         = '0%';
+    barEl.setAttribute('aria-valuenow', '0');
+    progressArea.classList.remove('pity-close', 'pity-charged');
+    return;
+  }
+
+  const threshold = config.threshold;
+  const remaining = Math.max(0, threshold - progress);
+  const pct       = Math.min(100, (progress / threshold) * 100);
+
+  targetNameEl.textContent  = `${config.emoji} ${config.name}`;
+  progressTextEl.textContent = `${progress.toLocaleString()} / ${threshold.toLocaleString()}`;
+  barEl.style.width          = `${pct.toFixed(2)}%`;
+  barEl.setAttribute('aria-valuenow', pct.toFixed(0));
+
+  if (remaining === 0) {
+    remainingEl.textContent = '✨ Pity ready — next roll guarantees this rank!';
+  } else {
+    remainingEl.textContent = `${remaining.toLocaleString()} rolls remaining`;
+  }
+
+  // Visual charge states (based on fill percentage)
+  progressArea.classList.toggle('pity-close',   pct >= 80 && pct < 95);
+  progressArea.classList.toggle('pity-charged', pct >= 95);
 }
