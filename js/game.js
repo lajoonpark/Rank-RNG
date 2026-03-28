@@ -105,6 +105,12 @@ function doRoll() {
   renderStats({ totalRolls, totalEarned: player.totalEarned });
   renderUpgrades(player);
 
+  // Queue cutscenes for any rare ranks that have one configured
+  if (typeof queueCutscenes === 'function' && typeof isCutsceneEnabled === 'function') {
+    const cutsceneRanks = rolledRanks.filter((r) => isCutsceneEnabled(r.name));
+    if (cutsceneRanks.length > 0) queueCutscenes(cutsceneRanks);
+  }
+
   // Start cooldown
   startCooldown();
 }
@@ -246,6 +252,10 @@ function attachEvents() {
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   initUI();
+
+  // Settings and cutscene system must init before loadGame/refreshAll
+  if (typeof initSettings === 'function') initSettings();
+  if (typeof initCutsceneSystem === 'function') initCutsceneSystem();
 
   const loaded = loadGame();
   if (!loaded) {
