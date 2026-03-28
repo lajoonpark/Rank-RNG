@@ -99,14 +99,14 @@ const CUTSCENE_CONFIG = {
     fadeInMs:    600,
     suspenseMs:  1700,
     flashMs:     600,
-    revealMs:    850,
+    revealMs:    900,
     effectsMs:   6600,
     fadeOutMs:   650,
     color:       '#FF1744',
-    bgColor:     '#150000',
+    bgColor:     '#000000',
     particleCount:  102,
     particleColors: ['#FF1744', '#FF6D00', '#FF4081', '#FF5252'],
-    soundType:   'power',
+    soundType:   'overlord',
     shake:       false,
     subtitle:    'None can stand before you.',
   },
@@ -348,6 +348,17 @@ function _playSound(type, level) {
         }
         _tone(ctx, 27.5, 'sine', t + 1.5, 4.0, 0.7, out);
         _noise(ctx, t + 2.5, 2.0, 0.4, out);
+        break;
+      }
+      case 'overlord': {
+        // Deep sub-bass drone — commanding and ominous, power building slowly
+        _tone(ctx, 41.2,  'sine',     t,       5.0, 0.55, out); // E1 sub-bass
+        _tone(ctx, 82.4,  'sine',     t + 0.4, 4.5, 0.35, out); // E2 drone
+        _tone(ctx, 123.5, 'triangle', t + 0.8, 4.0, 0.20, out); // B2 fifth
+        _sweep(ctx, 246.9, 123.5, 'sawtooth', t + 0.5, 3.5, 0.25, out); // B3→B2 descend
+        _tone(ctx, 1318.5, 'sine',   t + 2.0, 2.5, 0.08, out); // E6 high eerie harmonic
+        _sweep(ctx, 1318.5, 659.3, 'sine', t + 2.0, 2.5, 0.07, out); // E6→E5 glide down
+        _noise(ctx, t, 0.8, 0.18, out);
         break;
       }
     }
@@ -703,6 +714,7 @@ function _triggerRevealFlash(cfg) {
 // ---------------------------------------------------------------------------
 let _currentRankName = '';
 let _phaseTimeouts = [];
+let _pendingCleanup = null; // cleanup fn registered by special cutscenes
 
 function _clearTimeouts() {
   _phaseTimeouts.forEach(clearTimeout);
@@ -715,7 +727,222 @@ function _after(ms, fn) {
   return id;
 }
 
+// ---------------------------------------------------------------------------
+// Overlord special cutscene — unique cinematic sequence
+// ---------------------------------------------------------------------------
+function _playOverlordCutscene(rank, onDone) {
+  const cfg = CUTSCENE_CONFIG[rank.name];
+  if (!cfg) { onDone(); return; }
+
+  _currentRankName = rank.name;
+  _currentCfg = cfg;
+
+  // Populate reveal content
+  _dom.rankName.textContent = `${rank.emoji || ''} ${rank.name}`;
+  _dom.subtitle.textContent = cfg.subtitle || '';
+
+  // Reset standard DOM elements
+  _dom.suspense.style.display = 'none';
+  _dom.reveal.style.display = 'none';
+  _dom.reveal.classList.remove('cutscene-reveal-enter');
+  _dom.subtitle.classList.remove('cutscene-subtitle-enter');
+  _dom.overlay.classList.remove('cutscene-fade-out');
+  _dom.glow.style.opacity = '0';
+  _dom.glow.style.transition = '';
+  _dom.bgFx.style.background = '';
+  _dom.bgFx.style.animation = '';
+  _dom.bgFx.classList.remove('cutscene-bg-glitch', 'cutscene-bg-void', 'cutscene-bg-cosmic');
+  _dom.scanlines.style.display = 'none';
+  _particles = [];
+
+  // Black background; rank name styled in Overlord colour
+  _dom.overlay.style.background = '#000000';
+  _dom.rankName.className = 'cutscene-rank-name';
+  _dom.rankName.style.color = cfg.color;
+  _dom.rankName.style.textShadow = `0 0 40px ${cfg.color}cc, 0 0 80px ${cfg.color}66`;
+  _dom.glow.style.background =
+    `radial-gradient(circle, ${cfg.color}44 0%, ${cfg.color}11 50%, transparent 70%)`;
+
+  // ── Build Overlord-specific DOM elements ──────────────────────────────────
+
+  const introText = document.createElement('div');
+  introText.className = 'overlord-intro-text';
+  introText.textContent = '"your wish is my command..."';
+  _dom.overlay.appendChild(introText);
+
+  const diamondWrap = document.createElement('div');
+  diamondWrap.className = 'overlord-diamond-wrap';
+  const diamond = document.createElement('div');
+  diamond.className = 'overlord-diamond';
+  diamondWrap.appendChild(diamond);
+  _dom.overlay.appendChild(diamondWrap);
+
+  const whiteout = document.createElement('div');
+  whiteout.className = 'overlord-whiteout';
+  _dom.overlay.appendChild(whiteout);
+
+  function _cleanup() {
+    introText.remove();
+    diamondWrap.remove();
+    whiteout.remove();
+  }
+  _pendingCleanup = _cleanup;
+
+  // Show overlay — already on a black background, no fade-in needed
+  _dom.overlay.style.display = 'flex';
+  _dom.overlay.style.opacity = '1';
+  _dom.overlay.style.transition = '';
+
+  let elapsed = 0;
+
+  // Timing constants (ms)
+  const TEXT_FADE_IN  = 1400;
+  const TEXT_HOLD     = 1800;
+  const TEXT_FADE_OUT = 1000;
+  const TEXT_GAP      =  200;
+
+  const DIAMOND_APPEAR = 700;
+  const DIAMOND_RAMP1  = 1600;
+  const DIAMOND_RAMP2  = 1400;
+  const DIAMOND_SURGE  =  600;
+
+  const WHITEOUT_IN   =  500;
+  const WHITEOUT_HOLD =  300;
+  const WHITEOUT_OUT  =  700;
+  const WHITEOUT_GAP  =  200;
+
+  // ── Phase 1: Text fades in (letters converge) ─────────────────────────────
+  _after(80, () => {
+    introText.style.transition =
+      `opacity ${TEXT_FADE_IN}ms ease, letter-spacing ${TEXT_FADE_IN}ms ease`;
+    introText.style.opacity = '1';
+    introText.style.letterSpacing = '4px';
+  });
+  elapsed += TEXT_FADE_IN + TEXT_HOLD;
+
+  // ── Phase 1b: Text fades out ──────────────────────────────────────────────
+  _after(elapsed, () => {
+    introText.style.transition = `opacity ${TEXT_FADE_OUT}ms ease`;
+    introText.style.opacity = '0';
+  });
+  elapsed += TEXT_FADE_OUT + TEXT_GAP;
+
+  // ── Phase 2a: Diamond fades in (dim) ─────────────────────────────────────
+  _after(elapsed, () => {
+    diamondWrap.style.transition = `opacity ${DIAMOND_APPEAR}ms ease`;
+    diamondWrap.style.opacity = '1';
+    _playSound(cfg.soundType, cfg.level);
+  });
+  elapsed += DIAMOND_APPEAR;
+
+  // ── Phase 2b: Diamond brightness ramp — slow first pass ──────────────────
+  _after(elapsed, () => {
+    diamond.style.transition =
+      `filter ${DIAMOND_RAMP1}ms ease, box-shadow ${DIAMOND_RAMP1}ms ease`;
+    diamond.style.filter = 'brightness(1.0) saturate(1.1)';
+    diamond.style.boxShadow = [
+      '0 0 30px rgba(255,23,68,0.6)',
+      '0 0 60px rgba(255,23,68,0.3)',
+      '0 0 100px rgba(255,23,68,0.15)',
+    ].join(',');
+    _dom.glow.style.transition = `opacity ${DIAMOND_RAMP1}ms ease`;
+    _dom.glow.style.opacity = '0.35';
+  });
+  elapsed += DIAMOND_RAMP1;
+
+  // ── Phase 2c: Medium intensity ───────────────────────────────────────────
+  _after(elapsed, () => {
+    diamond.style.transition =
+      `filter ${DIAMOND_RAMP2}ms ease, box-shadow ${DIAMOND_RAMP2}ms ease`;
+    diamond.style.filter = 'brightness(2.5) saturate(1.4)';
+    diamond.style.boxShadow = [
+      '0 0 60px rgba(255,23,68,0.9)',
+      '0 0 120px rgba(255,23,68,0.5)',
+      '0 0 200px rgba(255,23,68,0.25)',
+    ].join(',');
+    _dom.glow.style.transition = `opacity ${DIAMOND_RAMP2}ms ease`;
+    _dom.glow.style.opacity = '0.65';
+  });
+  elapsed += DIAMOND_RAMP2;
+
+  // ── Phase 2d: Surge to peak brightness ───────────────────────────────────
+  _after(elapsed, () => {
+    diamond.style.transition =
+      `filter ${DIAMOND_SURGE}ms ease, box-shadow ${DIAMOND_SURGE}ms ease`;
+    diamond.style.filter = 'brightness(6.0) saturate(1.8) blur(2px)';
+    diamond.style.boxShadow = [
+      '0 0 120px rgba(255,23,68,1)',
+      '0 0 250px rgba(255,100,80,0.8)',
+      '0 0 400px rgba(255,150,100,0.5)',
+    ].join(',');
+    _dom.glow.style.transition = `opacity ${DIAMOND_SURGE}ms ease`;
+    _dom.glow.style.opacity = '1';
+  });
+  elapsed += DIAMOND_SURGE;
+
+  // ── Phase 3: Whiteout — screen overwhelmed by light ──────────────────────
+  _after(elapsed, () => {
+    whiteout.style.transition = `opacity ${WHITEOUT_IN}ms ease-in`;
+    whiteout.style.opacity = '1';
+  });
+  elapsed += WHITEOUT_IN + WHITEOUT_HOLD;
+
+  // ── Phase 3b: Whiteout fades out, revealing black + rank reveal ──────────
+  _after(elapsed, () => {
+    diamondWrap.style.transition = '';
+    diamondWrap.style.opacity = '0';
+    // Glow fades out at half the whiteout-out duration so it clears before the reveal
+    _dom.glow.style.transition = `opacity ${Math.floor(WHITEOUT_OUT * 0.5)}ms ease`;
+    _dom.glow.style.opacity = '0';
+    whiteout.style.transition = `opacity ${WHITEOUT_OUT}ms ease-out`;
+    whiteout.style.opacity = '0';
+  });
+  elapsed += WHITEOUT_OUT + WHITEOUT_GAP;
+
+  // ── Phase 4: Rank reveal ──────────────────────────────────────────────────
+  _after(elapsed, () => {
+    _dom.reveal.style.display = 'flex';
+    _dom.reveal.classList.add('cutscene-reveal-enter');
+    _particlePhase = 'burst';
+    _spawnBurstParticles(cfg);
+    _startParticleLoop();
+    _dom.glow.style.transition = `opacity ${cfg.revealMs}ms ease`;
+    _dom.glow.style.opacity = '0.7';
+    // Subtitle enters slightly after the rank name to create a staggered reveal effect
+    _after(Math.floor(cfg.revealMs * 0.6), () => {
+      _dom.subtitle.classList.add('cutscene-subtitle-enter');
+    });
+  });
+  elapsed += cfg.revealMs;
+
+  // ── Phase 5: Effects ──────────────────────────────────────────────────────
+  _after(elapsed, () => {
+    _particlePhase = 'drift';
+    _spawnEffectParticles(cfg);
+  });
+  elapsed += cfg.effectsMs;
+
+  // ── Phase 6: Fade out ─────────────────────────────────────────────────────
+  _after(elapsed, () => {
+    _dom.overlay.style.transition = `opacity ${cfg.fadeOutMs}ms ease`;
+    _dom.overlay.style.opacity = '0';
+  });
+  elapsed += cfg.fadeOutMs;
+
+  // ── Done ──────────────────────────────────────────────────────────────────
+  _after(elapsed, () => {
+    _teardownCutscene(); // also calls _pendingCleanup → _cleanup
+    onDone();
+  });
+}
+
 function _playSingleCutscene(rank, onDone) {
+  // Overlord has its own bespoke cinematic sequence
+  if (rank.name === 'Overlord') {
+    _playOverlordCutscene(rank, onDone);
+    return;
+  }
+
   const cfg = CUTSCENE_CONFIG[rank.name];
   if (!cfg) { onDone(); return; }
 
@@ -832,6 +1059,10 @@ function _teardownCutscene() {
   _particlePhase = 'idle';
   _currentCfg = null;
   _currentRankName = '';
+  if (typeof _pendingCleanup === 'function') {
+    _pendingCleanup();
+    _pendingCleanup = null;
+  }
   _dom.overlay.style.display = 'none';
   _dom.overlay.style.opacity = '0';
   _dom.overlay.style.transition = '';
