@@ -105,10 +105,16 @@ function doRoll() {
   renderStats({ totalRolls, totalEarned: player.totalEarned });
   renderUpgrades(player);
 
-  // Queue cutscenes for any rare ranks that have one configured
-  if (typeof queueCutscenes === 'function' && typeof isCutsceneEnabled === 'function') {
-    const cutsceneRanks = rolledRanks.filter((r) => isCutsceneEnabled(r.name));
-    if (cutsceneRanks.length > 0) queueCutscenes(cutsceneRanks);
+  // Queue cutscenes for any rare ranks that have one configured.
+  // Stop auto-roll first so it does not continue running in the background
+  // during the cutscene. Skip if a cutscene is already playing.
+  if (typeof queueCutscenes === 'function') {
+    const cutsceneRanks = rolledRanks.filter(shouldPlayCutscene);
+    if (cutsceneRanks.length > 0 &&
+        (typeof isCutscenesPlaying !== 'function' || !isCutscenesPlaying())) {
+      stopAutoRoll();
+      queueCutscenes(cutsceneRanks);
+    }
   }
 
   // Start cooldown
@@ -124,6 +130,21 @@ function startCooldown() {
     rollOnCooldown = false;
     setRollButtonEnabled(true, player.rollsPerClick);
   }, player.rollCooldownMs);
+}
+
+// ---------------------------------------------------------------------------
+// Cutscene helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when a cutscene will actually play for the given rank —
+ * i.e. the cutscene system is enabled globally, the rank's individual
+ * cutscene is enabled, and a config entry exists for it.
+ */
+function shouldPlayCutscene(rank) {
+  if (typeof CUTSCENE_CONFIG === 'undefined' || !CUTSCENE_CONFIG[rank.name]) return false;
+  if (typeof isCutsceneEnabled !== 'function') return false;
+  return isCutsceneEnabled(rank.name);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +164,7 @@ function startAutoRoll() {
 }
 
 function stopAutoRoll() {
+  if (!autoRollRunning) return;
   autoRollRunning = false;
   clearInterval(autoRollTimer);
   autoRollTimer = null;

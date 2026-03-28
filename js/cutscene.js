@@ -7,6 +7,7 @@
  * Public API (window globals):
  *   queueCutscenes(ranksArray)   – enqueue one or more rare rolls
  *   isCutsceneSystemReady()      – true after initCutsceneSystem() runs
+ *   isCutscenesPlaying()         – true while a cutscene is currently playing
  */
 
 // ---------------------------------------------------------------------------
@@ -897,6 +898,7 @@ function queueCutscenes(ranks, onDone) {
 }
 
 function isCutsceneSystemReady() { return !!_dom.overlay; }
+function isCutscenesPlaying()    { return _playing; }
 
 // ---------------------------------------------------------------------------
 // Initialise — called from game.js DOMContentLoaded
