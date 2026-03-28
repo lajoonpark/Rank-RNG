@@ -52,6 +52,14 @@
           </div>
         </div>
 
+        <!-- Active area indicator -->
+        <div id="active-area-indicator" class="active-area-indicator" style="display:none;">
+          <span id="active-area-emoji" class="active-area-emoji"></span>
+          <span id="active-area-name" class="active-area-name"></span>
+          <span class="active-area-sep">·</span>
+          <span id="active-area-hint" class="active-area-hint"></span>
+        </div>
+
         <div class="roll-btn-wrap">
           <button id="roll-btn" aria-label="Roll for a rank">
             <span id="roll-btn-label">Roll</span>
@@ -123,6 +131,7 @@
       <div class="footer-controls">
         <button class="ctrl-btn" id="save-btn">💾 Save</button>
         <button class="ctrl-btn danger" id="reset-btn">🗑 Reset</button>
+        <button class="ctrl-btn" id="areas-btn">🗺️ Areas</button>
         <button class="ctrl-btn" id="settings-btn">⚙️ Settings</button>
         <button class="ctrl-btn" id="dev-btn">🛠 Dev</button>
       </div>
@@ -187,6 +196,7 @@
   <script src="js/player.js"></script>
   <script src="js/inventory.js"></script>
   <script src="js/pity.js"></script>
+  <script src="js/areas.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/cutscene.js"></script>

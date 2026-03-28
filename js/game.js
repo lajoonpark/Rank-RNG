@@ -19,7 +19,15 @@ const AUTO_ROLL_TICK_MS = 100; // how often the auto-roll scheduler runs
 let player = null;
 let inventory = null;
 let pitySystem = null;
+let areaSystem = null;
 let totalRolls = 0;
+
+/**
+ * Set of every rank ID that has been obtained at least once.
+ * Persisted in the save file.  Used by AreaSystem.checkUnlocks() to evaluate
+ * rank-based area unlock requirements (e.g. "Obtain Overlord once").
+ */
+let ranksEverObtained = new Set();
 
 let rollOnCooldown = false;
 let autoRollRunning = false;
@@ -35,6 +43,8 @@ function saveGame() {
     inventory: inventory.toJSON(),
     totalRolls,
     pity: pitySystem ? pitySystem.toJSON() : null,
+    areas: areaSystem ? areaSystem.toJSON() : null,
+    ranksEverObtained: [...ranksEverObtained],
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   showToast('Game saved! 💾');
@@ -49,6 +59,10 @@ function loadGame() {
     inventory = new Inventory(data.inventory);
     totalRolls = data.totalRolls ?? 0;
     pitySystem = new PitySystem(data.pity ?? null);
+    areaSystem = new AreaSystem(data.areas ?? null);
+    ranksEverObtained = new Set(
+      Array.isArray(data.ranksEverObtained) ? data.ranksEverObtained : []
+    );
     return true;
   } catch (e) {
     console.warn('Failed to load save:', e);
@@ -63,7 +77,10 @@ function resetGame() {
   player = new PlayerState();
   inventory = new Inventory();
   pitySystem = new PitySystem();
+  areaSystem = new AreaSystem();
+  ranksEverObtained = new Set();
   totalRolls = 0;
+  applyAreaTheme(areaSystem.getActiveArea().theme);
   refreshAll();
   showToast('Game reset. Good luck! 🎲');
 }
@@ -87,10 +104,11 @@ function doRoll() {
 
   const count = player.rollsPerClick;
 
-  // Process all rolls through the pity system.
+  // Process all rolls through the pity system, passing active area boosts.
   // Returns { rank, isPityReward }[] — one entry per roll.
   // If no pity target is selected the pity system simply forwards to rollItem.
-  const results = pitySystem.processRolls(count, player.upgrades.luck);
+  const areaBoosts = areaSystem ? areaSystem.getActiveBoosts() : {};
+  const results = pitySystem.processRolls(count, player.upgrades.luck, areaBoosts);
 
   const rolledRanks = [];
   for (const { rank, isPityReward } of results) {
@@ -100,6 +118,8 @@ function doRoll() {
 
     inventory.addRank(rank, value);
     player.earn(value + CURRENCY_PER_ROLL);
+    // Track every distinct rank ever obtained (for area unlock requirements)
+    ranksEverObtained.add(rank.id);
     // rolledRanks holds plain rank objects — used for the cutscene pipeline which
     // needs only rank metadata.  The full results array (with isPityReward) is
     // passed directly to renderRollResult for badge rendering.
@@ -112,6 +132,15 @@ function doRoll() {
 
   totalRolls += count;
 
+  // Check for newly unlocked areas and notify the player
+  if (areaSystem) {
+    const newAreas = areaSystem.checkUnlocks({ totalRolls, ranksEverObtained });
+    newAreas.forEach((areaId) => {
+      const area = AREA_CONFIG.find((a) => a.id === areaId);
+      if (area) showToast(`🗺️ New area unlocked: ${area.emoji} ${area.name}!`);
+    });
+  }
+
   // Update UI
   renderRollResult(results);
   renderCurrency(player);
@@ -119,6 +148,8 @@ function doRoll() {
   renderStats({ totalRolls, totalEarned: player.totalEarned });
   renderUpgrades(player);
   renderPity(pitySystem);
+  renderActiveArea(areaSystem);
+  renderOdds(player.upgrades.luck, areaBoosts);
 
   // Queue cutscenes for any rare ranks that have one configured.
   // Stop auto-roll first so it does not continue running in the background
@@ -203,9 +234,10 @@ function handleUpgradePurchase(upgradeId) {
     showToast('Not enough coins! 💸');
     return;
   }
+  const areaBoosts = areaSystem ? areaSystem.getActiveBoosts() : {};
   renderCurrency(player);
   renderUpgrades(player);
-  renderOdds(player.upgrades.luck);
+  renderOdds(player.upgrades.luck, areaBoosts);
   // Update roll button label in case multiRoll changed
   setRollButtonEnabled(!rollOnCooldown, player.rollsPerClick);
 
@@ -234,14 +266,16 @@ function handleSell(rankId) {
 // Full UI refresh
 // ---------------------------------------------------------------------------
 function refreshAll() {
+  const areaBoosts = areaSystem ? areaSystem.getActiveBoosts() : {};
   renderCurrency(player);
   renderInventory(inventory);
   renderUpgrades(player);
   renderStats({ totalRolls, totalEarned: player.totalEarned });
-  renderOdds(player.upgrades.luck);
+  renderOdds(player.upgrades.luck, areaBoosts);
   setRollButtonEnabled(true, player.rollsPerClick);
   setAutoRollBtnLabel(autoRollRunning);
   renderPity(pitySystem);
+  renderActiveArea(areaSystem);
 }
 
 // ---------------------------------------------------------------------------
@@ -300,6 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
     player = new PlayerState();
     inventory = new Inventory();
     pitySystem = new PitySystem();
+    areaSystem = new AreaSystem();
+    ranksEverObtained = new Set();
   }
 
   attachEvents();
@@ -311,6 +347,24 @@ document.addEventListener('DOMContentLoaded', () => {
       pitySystem.setTarget(newTarget);
       renderPity(pitySystem);
     });
+  }
+
+  // Initialise the area system panel and wire the select handler
+  if (typeof initAreas === 'function') {
+    initAreas(
+      () => areaSystem,
+      (areaId) => {
+        const switched = areaSystem.setActiveArea(areaId);
+        if (switched) {
+          const area = areaSystem.getActiveArea();
+          applyAreaTheme(area.theme);
+          renderActiveArea(areaSystem);
+          renderOdds(player.upgrades.luck, areaSystem.getActiveBoosts());
+          renderAreasPanel(areaSystem);
+          showToast(`🗺️ Entered ${area.emoji} ${area.name}!`);
+        }
+      }
+    );
   }
 
   refreshAll();

@@ -70,15 +70,19 @@ const RANKS = [
  * RANKS (e.g. the Guaranteed Rare+ feature uses only rarityLevel >= 4).
  * Returned indices align with the provided pool array.
  *
- * @param {number} luck – player luck level (0 = base, higher = more rare drops)
+ * @param {number}   luck         – player luck level (0 = base, higher = more rare drops)
  * @param {object[]} [pool=RANKS] – subset of RANKS to use; defaults to all ranks
+ * @param {object}   [areaBoosts={}] – optional rank boost multipliers from the active area
+ *                                      e.g. { overlord: 5 } raises Overlord's weight by 5×
  * @returns {{ id: string, chance: number }[]} per-rank chance percentages summing to 100
  */
-function buildAdjustedChances(luck, pool = RANKS) {
-  // Step 1: Apply luck multiplier — higher rarityLevel gets a larger boost
+function buildAdjustedChances(luck, pool = RANKS, areaBoosts = {}) {
+  // Step 1: Apply luck multiplier — higher rarityLevel gets a larger boost.
+  //         Area boosts are applied as an additional multiplier to the base chance
+  //         so boosted ranks get a larger share of the normalised total.
   const adjusted = pool.map((r) => ({
     id: r.id,
-    raw: r.baseChance * (1 + luck * r.rarityLevel * 0.02),
+    raw: r.baseChance * (areaBoosts[r.id] || 1) * (1 + luck * r.rarityLevel * 0.02),
   }));
 
   // Step 2: Normalize so all chances sum back to 100%
@@ -116,10 +120,11 @@ function _getDevConfig() {
  *   2. devGuaranteedRare – restrict the roll pool to rarityLevel >= 4
  *   3. devLuckMultiplier – multiply the effective luck before normalization
  *
- * @param {number} luck – current player luck level
+ * @param {number} luck       – current player luck level
+ * @param {object} [areaBoosts={}] – rank boost multipliers from the active area
  * @returns {object} the rank object that was rolled (from RANKS)
  */
-function rollItem(luck = 0) {
+function rollItem(luck = 0, areaBoosts = {}) {
   const dev = _getDevConfig();
 
   if (dev.active) {
@@ -134,7 +139,7 @@ function rollItem(luck = 0) {
     // 2. Guaranteed Rare+ — restrict pool to rarityLevel >= 4
     if (dev.guaranteedRare) {
       const rarePool = RANKS.filter((r) => r.rarityLevel >= 4);
-      const chances = buildAdjustedChances(effectiveLuck, rarePool);
+      const chances = buildAdjustedChances(effectiveLuck, rarePool, areaBoosts);
       let roll = Math.random() * 100;
       for (let i = 0; i < rarePool.length; i++) {
         roll -= chances[i].chance;
@@ -144,7 +149,7 @@ function rollItem(luck = 0) {
     }
 
     // 3. Luck multiplier only — standard distribution with boosted luck
-    const chances = buildAdjustedChances(effectiveLuck);
+    const chances = buildAdjustedChances(effectiveLuck, RANKS, areaBoosts);
     let roll = Math.random() * 100;
     for (let i = 0; i < chances.length; i++) {
       roll -= chances[i].chance;
@@ -154,7 +159,7 @@ function rollItem(luck = 0) {
   }
 
   // Normal (non-dev) roll path
-  const chances = buildAdjustedChances(luck);
+  const chances = buildAdjustedChances(luck, RANKS, areaBoosts);
 
   // Pick a random point in [0, 100) and walk the cumulative distribution
   let roll = Math.random() * 100;
@@ -175,10 +180,11 @@ const rollRank = rollItem;
  * Used by the UI to populate the odds table.
  *
  * @param {number} luck
+ * @param {object} [areaBoosts={}] – rank boost multipliers from the active area
  * @returns {{ id: string, chance: number }[]}
  */
-function getDropChances(luck = 0) {
-  return buildAdjustedChances(luck);
+function getDropChances(luck = 0, areaBoosts = {}) {
+  return buildAdjustedChances(luck, RANKS, areaBoosts);
 }
 
 // ---------------------------------------------------------------------------
