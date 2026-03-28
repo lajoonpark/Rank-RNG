@@ -493,3 +493,126 @@ header p.subtitle {
 #toast.visible {
   transform: translateX(-50%) translateY(0);
 }
+
+/* ================================================================
+   Special rank colour effects
+   Applied as CSS classes when a rank's `color` field is a keyword
+   (gradient | rainbow | blackhole | glitch) rather than a hex code.
+   ================================================================ */
+
+/* ---- Gradient — animated multi-stop gradient text ---- */
+@keyframes gradientFlow {
+  0%   { background-position: 0%   50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0%   50%; }
+}
+
+.fx-gradient {
+  background: linear-gradient(270deg, #ff00cc, #ff6600, #ffcc00, #00ff88, #00ccff, #ff00cc);
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientFlow 3s ease infinite;
+}
+
+/* ---- Rainbow — cycling hue through the spectrum ---- */
+@keyframes rainbowHue {
+  0%   { color: #ff0000; }
+  17%  { color: #ff8800; }
+  33%  { color: #eeee00; }
+  50%  { color: #00cc00; }
+  67%  { color: #0088ff; }
+  83%  { color: #8800ff; }
+  100% { color: #ff0000; }
+}
+
+.fx-rainbow {
+  animation: rainbowHue 1.5s linear infinite;
+}
+
+/* ---- Blackhole — dark pulsing effect ---- */
+@keyframes blackholePulse {
+  0%   { color: #666; text-shadow: 0 0 6px #fff4; }
+  50%  { color: #ddd; text-shadow: 0 0 18px #fffa, 0 0 32px #fff6; }
+  100% { color: #666; text-shadow: 0 0 6px #fff4; }
+}
+
+.fx-blackhole {
+  animation: blackholePulse 2s ease-in-out infinite;
+}
+
+/* ---- Glitch — flicker / chromatic-aberration animation ---- */
+@keyframes glitchFlicker {
+  0%   { color: #ff0044; transform: none; }
+  10%  { color: #00ffff; transform: translate(-2px,  1px) skewX(-8deg); }
+  20%  { color: #ff0044; transform: none; }
+  35%  { color: #ffff00; transform: translate( 2px, -1px); }
+  50%  { color: #ff0044; transform: none; }
+  65%  { color: #00ffff; transform: translate(-1px,  2px) skewX(5deg); }
+  80%  { color: #ff0044; transform: none; }
+  100% { color: #ff0044; transform: none; }
+}
+
+.fx-glitch {
+  animation: glitchFlicker 0.7s steps(1) infinite;
+}
+
+/* ---- Roll-result card border/glow variants for special colours ---- */
+
+/* gradient card */
+.fx-card-gradient {
+  border-color: #ff6600 !important;
+  box-shadow: 0 0 20px #ff6600aa, 0 0 40px #9900ff88 !important;
+}
+
+/* rainbow card — cycling border */
+@keyframes rainbowBorderCycle {
+  0%   { border-color: #ff0000; box-shadow: 0 0 18px #ff000088; }
+  17%  { border-color: #ff8800; box-shadow: 0 0 18px #ff880088; }
+  33%  { border-color: #eeee00; box-shadow: 0 0 18px #eeee0088; }
+  50%  { border-color: #00cc00; box-shadow: 0 0 18px #00cc0088; }
+  67%  { border-color: #0088ff; box-shadow: 0 0 18px #0088ff88; }
+  83%  { border-color: #8800ff; box-shadow: 0 0 18px #8800ff88; }
+  100% { border-color: #ff0000; box-shadow: 0 0 18px #ff000088; }
+}
+
+.fx-card-rainbow {
+  animation: rainbowBorderCycle 1.5s linear infinite;
+}
+
+/* blackhole card */
+@keyframes blackholeCard {
+  0%   { box-shadow: 0 0 10px #000, 0 0 20px #111; }
+  50%  { box-shadow: 0 0 30px #333, 0 0 60px #222; }
+  100% { box-shadow: 0 0 10px #000, 0 0 20px #111; }
+}
+
+.fx-card-blackhole {
+  border-color: #333 !important;
+  animation: blackholeCard 2s ease-in-out infinite;
+}
+
+/* glitch card */
+@keyframes glitchCardFlicker {
+  0%   { border-color: #ff0044; box-shadow:  0 0 18px #ff004488; }
+  25%  { border-color: #00ffff; box-shadow:  4px 0 0 #ff004488, -4px 0 0 #00ffff88; }
+  50%  { border-color: #ff0044; box-shadow:  0 0 18px #ff004488; }
+  75%  { border-color: #ffff00; box-shadow: -2px 0 0 #ffff0088,   2px 0 0 #ff004488; }
+  100% { border-color: #ff0044; box-shadow:  0 0 18px #ff004488; }
+}
+
+.fx-card-glitch {
+  animation: glitchCardFlicker 0.6s steps(1) infinite;
+}
+
+/* ---- Ultra-rare glow — extra brightness pulse for rarityLevel >= 10 ---- */
+@keyframes ultraRareGlow {
+  0%   { filter: brightness(1); }
+  50%  { filter: brightness(1.18) drop-shadow(0 0 14px var(--rank-color, #fff)); }
+  100% { filter: brightness(1); }
+}
+
+.fx-card-ultra-rare {
+  animation: ultraRareGlow 2s ease-in-out infinite;
+}

@@ -1,173 +1,162 @@
 /**
  * rng.js — RNG System
  *
- * Defines all rank tiers with their base weights and values.
+ * Defines all 18 rank tiers with base drop chances and values.
  * Provides a weighted-random roll function that respects the
  * player's current luck level.
+ *
+ * Key concepts:
+ *   baseChance  – raw percentage weight (all tiers sum to ~100%)
+ *   rarityLevel – integer 1 (common) → 18 (rarest); drives luck scaling
+ *   color       – hex code OR special keyword: gradient | rainbow | blackhole | glitch
+ *
+ * Luck formula (applied before normalization):
+ *   adjustedChance = baseChance * (1 + luck * rarityLevel * 0.02)
+ *
+ * Because every rank gets boosted—but higher-rarity ranks get a larger
+ * multiplier—normalization automatically compresses lower-tier shares
+ * without ever sending any weight negative.
  */
 
 // ---------------------------------------------------------------------------
 // Rank definitions
 // Each rank has:
-//   id       – unique string key
-//   name     – display name
-//   weight   – base drop weight (higher = more common)
-//   value    – currency value when sold / added to inventory worth
-//   color    – CSS colour used in the UI
-//   emoji    – decorative icon shown next to the rank name
+//   id          – unique string key
+//   name        – display name
+//   baseChance  – base drop percentage weight
+//   value       – currency value added to inventory / earned on roll
+//   color       – CSS colour (hex) or special-effect keyword
+//   rarityLevel – integer (1 = most common, 18 = rarest)
+//   emoji       – decorative icon shown next to the rank name
 // ---------------------------------------------------------------------------
 const RANKS = [
-  {
-    id: 'common',
-    name: 'Common',
-    weight: 4500,
-    value: 1,
-    color: '#9e9e9e',
-    emoji: '⚪',
-  },
-  {
-    id: 'uncommon',
-    name: 'Uncommon',
-    weight: 2500,
-    value: 3,
-    color: '#4caf50',
-    emoji: '🟢',
-  },
-  {
-    id: 'rare',
-    name: 'Rare',
-    weight: 1500,
-    value: 10,
-    color: '#2196f3',
-    emoji: '🔵',
-  },
-  {
-    id: 'epic',
-    name: 'Epic',
-    weight: 800,
-    value: 35,
-    color: '#9c27b0',
-    emoji: '🟣',
-  },
-  {
-    id: 'legendary',
-    name: 'Legendary',
-    weight: 400,
-    value: 100,
-    color: '#ff9800',
-    emoji: '🟠',
-  },
-  {
-    id: 'mythic',
-    name: 'Mythic',
-    weight: 200,
-    value: 300,
-    color: '#f44336',
-    emoji: '🔴',
-  },
-  {
-    id: 'ruler',
-    name: 'Ruler',
-    weight: 80,
-    value: 1000,
-    color: '#ffd700',
-    emoji: '👑',
-  },
-  {
-    id: 'overlord',
-    name: 'Overlord',
-    weight: 20,
-    value: 5000,
-    color: '#ff00ff',
-    emoji: '💎',
-  },
+  { id: 'common',          name: 'Common',          baseChance: 40,     value: 1,            color: '#9E9E9E',   rarityLevel: 1,  emoji: '⚪' },
+  { id: 'basic',           name: 'Basic',            baseChance: 25,     value: 2,            color: '#BDBDBD',   rarityLevel: 2,  emoji: '🔘' },
+  { id: 'uncommon',        name: 'Uncommon',         baseChance: 15,     value: 5,            color: '#4CAF50',   rarityLevel: 3,  emoji: '🟢' },
+  { id: 'rare',            name: 'Rare',             baseChance: 8,      value: 15,           color: '#2196F3',   rarityLevel: 4,  emoji: '🔵' },
+  { id: 'epic',            name: 'Epic',             baseChance: 5,      value: 50,           color: '#9C27B0',   rarityLevel: 5,  emoji: '🟣' },
+  { id: 'legendary',       name: 'Legendary',        baseChance: 3,      value: 150,          color: '#FF9800',   rarityLevel: 6,  emoji: '🟠' },
+  { id: 'mythic',          name: 'Mythic',           baseChance: 2,      value: 500,          color: '#F44336',   rarityLevel: 7,  emoji: '🔴' },
+  { id: 'ascended',        name: 'Ascended',         baseChance: 1,      value: 2000,         color: '#E91E63',   rarityLevel: 8,  emoji: '✨' },
+  { id: 'immortal',        name: 'Immortal',         baseChance: 0.5,    value: 10000,        color: '#FFD700',   rarityLevel: 9,  emoji: '💫' },
+  { id: 'eternal',         name: 'Eternal',          baseChance: 0.2,    value: 50000,        color: '#00E5FF',   rarityLevel: 10, emoji: '🌊' },
+  { id: 'celestial',       name: 'Celestial',        baseChance: 0.1,    value: 250000,       color: '#FFFFFF',   rarityLevel: 11, emoji: '⭐' },
+  { id: 'transcendent',    name: 'Transcendent',     baseChance: 0.05,   value: 1000000,      color: '#7C4DFF',   rarityLevel: 12, emoji: '🔮' },
+  { id: 'ruler',           name: 'Ruler',            baseChance: 0.02,   value: 5000000,      color: '#C6A700',   rarityLevel: 13, emoji: '👑' },
+  { id: 'overlord',        name: 'Overlord',         baseChance: 0.01,   value: 25000000,     color: '#FF1744',   rarityLevel: 14, emoji: '💎' },
+  { id: 'cosmic',          name: 'Cosmic',           baseChance: 0.005,  value: 100000000,    color: 'gradient',  rarityLevel: 15, emoji: '🌌' },
+  { id: 'infinity',        name: 'Infinity',         baseChance: 0.001,  value: 1000000000,   color: 'rainbow',   rarityLevel: 16, emoji: '♾️' },
+  { id: 'singularity',     name: 'Singularity',      baseChance: 0.0005, value: 5000000000,   color: 'blackhole', rarityLevel: 17, emoji: '🕳️' },
+  { id: 'reality_breaker', name: 'Reality Breaker',  baseChance: 0.0001, value: 50000000000,  color: 'glitch',    rarityLevel: 18, emoji: '⚡' },
 ];
 
-// Total base weight (10 000) — used for percentage calculations
-const BASE_TOTAL_WEIGHT = RANKS.reduce((sum, r) => sum + r.weight, 0);
-
 // ---------------------------------------------------------------------------
-// Luck scaling
+// Luck-adjusted chance calculation
 //
-// Each luck level redistributes weight from the bottom two tiers toward the
-// top tiers.  The transfer amount per level is capped so the system never
-// breaks (i.e. common weight can never go below a small floor).
+// Formula: adjustedChance = baseChance * (1 + luck * rarityLevel * 0.02)
+//
+//   luck = 0  → every rank keeps its baseChance exactly
+//   luck > 0  → every rank scales up, but higher rarityLevel ranks scale MORE
+//
+// After applying the multiplier we normalize all values so they sum to 100%.
+// Normalization is what actually compresses lower-tier shares — no weight
+// ever goes negative, keeping the system stable at any luck level.
 // ---------------------------------------------------------------------------
-const LUCK_TRANSFER_PER_LEVEL = 80; // weight units moved per luck level
-const COMMON_WEIGHT_FLOOR = 500;     // minimum weight kept on Common
-const UNCOMMON_WEIGHT_FLOOR = 200;   // minimum weight kept on Uncommon
 
 /**
- * Build an adjusted weight array for the given luck level.
+ * Compute normalized drop chances for all ranks at the given luck level.
  *
- * @param {number} luckLevel – current player luck level (0 = base)
- * @returns {number[]} array of weights parallel to RANKS
+ * @param {number} luck – player luck level (0 = base, higher = more rare drops)
+ * @returns {{ id: string, chance: number }[]} per-rank chance percentages summing to 100
  */
-function buildWeights(luckLevel) {
-  const weights = RANKS.map((r) => r.weight);
+function buildAdjustedChances(luck) {
+  // Step 1: Apply luck multiplier — higher rarityLevel gets a larger boost
+  const adjusted = RANKS.map((r) => ({
+    id: r.id,
+    raw: r.baseChance * (1 + luck * r.rarityLevel * 0.02),
+  }));
 
-  for (let i = 0; i < luckLevel; i++) {
-    // Take weight from Common first, then Uncommon
-    let transfer = LUCK_TRANSFER_PER_LEVEL;
-
-    const commonAvail = Math.max(0, weights[0] - COMMON_WEIGHT_FLOOR);
-    const fromCommon = Math.min(transfer, commonAvail);
-    weights[0] -= fromCommon;
-    transfer -= fromCommon;
-
-    if (transfer > 0) {
-      const uncommonAvail = Math.max(0, weights[1] - UNCOMMON_WEIGHT_FLOOR);
-      const fromUncommon = Math.min(transfer, uncommonAvail);
-      weights[1] -= fromUncommon;
-      transfer -= fromUncommon;
-    }
-
-    // Distribute the transferred weight across tiers Rare–Overlord
-    // using a simple proportional spread (more goes to mid tiers so it
-    // feels rewarding without immediately flooding Overlord).
-    const higherTierWeights = [6, 5, 4, 3, 2, 1]; // Rare→Overlord relative share
-    const higherTotal = higherTierWeights.reduce((a, b) => a + b, 0);
-    const moved = LUCK_TRANSFER_PER_LEVEL - transfer; // how much was actually taken
-    higherTierWeights.forEach((share, idx) => {
-      weights[2 + idx] += Math.round((moved * share) / higherTotal);
-    });
-  }
-
-  return weights;
+  // Step 2: Normalize so all chances sum back to 100%
+  const total = adjusted.reduce((sum, a) => sum + a.raw, 0);
+  return adjusted.map((a) => ({
+    id: a.id,
+    chance: (a.raw / total) * 100,
+  }));
 }
 
 /**
- * Perform a single weighted-random roll.
+ * Perform a single weighted-random roll using luck-adjusted chances.
  *
- * @param {number} luckLevel – current player luck level
+ * @param {number} luck – current player luck level
  * @returns {object} the rank object that was rolled (from RANKS)
  */
-function rollRank(luckLevel = 0) {
-  const weights = buildWeights(luckLevel);
-  const total = weights.reduce((a, b) => a + b, 0);
-  let roll = Math.random() * total;
+function rollItem(luck = 0) {
+  const chances = buildAdjustedChances(luck);
 
-  for (let i = 0; i < RANKS.length; i++) {
-    roll -= weights[i];
+  // Pick a random point in [0, 100) and walk the cumulative distribution
+  let roll = Math.random() * 100;
+  for (let i = 0; i < chances.length; i++) {
+    roll -= chances[i].chance;
     if (roll <= 0) return RANKS[i];
   }
 
-  // Fallback (floating-point edge case)
+  // Floating-point safety fallback
   return RANKS[0];
 }
 
+// Backward-compatible alias used by existing game.js call sites
+const rollRank = rollItem;
+
 /**
- * Calculate the effective drop-chance percentage for every rank
- * at the given luck level.  Used by the UI to show odds.
+ * Return the effective drop-chance percentage for every rank at the given luck.
+ * Used by the UI to populate the odds table.
  *
- * @param {number} luckLevel
+ * @param {number} luck
  * @returns {{ id: string, chance: number }[]}
  */
-function getDropChances(luckLevel = 0) {
-  const weights = buildWeights(luckLevel);
-  const total = weights.reduce((a, b) => a + b, 0);
-  return RANKS.map((rank, i) => ({
-    id: rank.id,
-    chance: (weights[i] / total) * 100,
-  }));
+function getDropChances(luck = 0) {
+  return buildAdjustedChances(luck);
+}
+
+// ---------------------------------------------------------------------------
+// Debug mode — simulate N rolls and log distribution to the console
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a simulation of `count` rolls and log the distribution to the console.
+ * Useful for verifying RNG balance.
+ *
+ * Usage: debugRollSimulation()              // 100 000 rolls at luck 0
+ *        debugRollSimulation(500000, 10)    // 500 000 rolls at luck 10
+ *
+ * This function is available on the global scope (browser console):
+ *   > debugRollSimulation(100000, 5)
+ *
+ * @param {number} count – number of rolls to simulate (default 100 000)
+ * @param {number} luck  – luck level to test (default 0)
+ */
+function debugRollSimulation(count = 100_000, luck = 0) {
+  console.group(`🎲 Roll Simulation — ${count.toLocaleString()} rolls (luck=${luck})`);
+
+  const tally = {};
+  RANKS.forEach((r) => (tally[r.id] = 0));
+  for (let i = 0; i < count; i++) {
+    tally[rollItem(luck).id]++;
+  }
+
+  const chances = getDropChances(luck);
+  console.log('Rank                  Expected%    Actual%     Ratio');
+  RANKS.slice()
+    .reverse()
+    .forEach((rank) => {
+      const expected = chances.find((c) => c.id === rank.id).chance;
+      const actual = (tally[rank.id] / count) * 100;
+      const ratio = expected > 0 ? (actual / expected).toFixed(3) : '—';
+      console.log(
+        `${rank.name.padEnd(22)}${expected.toFixed(4).padStart(10)}%  ` +
+        `${actual.toFixed(4).padStart(10)}%  ${ratio.toString().padStart(8)}`
+      );
+    });
+
+  console.groupEnd();
 }

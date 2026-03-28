@@ -7,6 +7,22 @@
  */
 
 // ---------------------------------------------------------------------------
+// Special colour-effect keywords and fallback border colours
+//
+// Ranks whose `color` field is one of these keywords receive a CSS animation
+// class instead of an inline hex colour.  The fallback colours are used for
+// list-item borders and other places that need a concrete colour value.
+// ---------------------------------------------------------------------------
+const SPECIAL_COLOR_FX = ['gradient', 'rainbow', 'blackhole', 'glitch'];
+
+const SPECIAL_COLOR_FALLBACKS = {
+  gradient: '#ff6600',
+  rainbow:  '#ff0000',
+  blackhole: '#666666',
+  glitch:   '#ff0044',
+};
+
+// ---------------------------------------------------------------------------
 // Cached DOM references (populated on DOMContentLoaded)
 // ---------------------------------------------------------------------------
 const UI = {
@@ -57,6 +73,21 @@ function fmtNumber(n) {
   return Math.floor(n).toLocaleString();
 }
 
+/**
+ * Format a percentage chance with enough decimal places to always show
+ * a non-zero value for ultra-rare drops.
+ * e.g.  40.0453% → "40.0453%"   0.000100% → "0.000100%"
+ *
+ * @param {number} pct – percentage value (0–100)
+ * @returns {string}
+ */
+function fmtChance(pct) {
+  if (pct === 0) return '0%';
+  // Show enough decimals so the first significant digit is visible
+  const decimals = pct >= 0.01 ? 4 : Math.max(4, -Math.floor(Math.log10(pct)) + 2);
+  return pct.toFixed(decimals) + '%';
+}
+
 // ---------------------------------------------------------------------------
 // Currency / stats bar
 // ---------------------------------------------------------------------------
@@ -72,6 +103,75 @@ function renderStats(stats) {
 // ---------------------------------------------------------------------------
 // Roll result display
 // ---------------------------------------------------------------------------
+
+/**
+ * Apply colour styling (including animated special effects) to an element.
+ * Removes any previously applied fx classes before setting the new state.
+ *
+ * @param {HTMLElement} el    – element to style (text node)
+ * @param {string}      color – rank color (hex string or special keyword)
+ */
+function applyRankColorToEl(el, color) {
+  SPECIAL_COLOR_FX.forEach((fx) => el.classList.remove(`fx-${fx}`));
+  el.style.color = '';
+
+  if (SPECIAL_COLOR_FX.includes(color)) {
+    el.classList.add(`fx-${color}`);
+  } else {
+    el.style.color = color;
+  }
+}
+
+/**
+ * Display a single roll result in the roll result card.
+ * Handles plain hex colours and special animated effects.
+ * Adds an extra glow animation for rarityLevel >= 10.
+ *
+ * @param {object} result – rank object from RANKS
+ */
+function displayRoll(result) {
+  const nameEl = UI.rollResult;
+  const cardEl = UI.rollResultCard;
+  if (!nameEl || !cardEl) return;
+
+  nameEl.textContent = `${result.emoji} ${result.name}`;
+
+  // --- Clear previous effects ---
+  SPECIAL_COLOR_FX.forEach((fx) => {
+    nameEl.classList.remove(`fx-${fx}`);
+    cardEl.classList.remove(`fx-card-${fx}`);
+  });
+  cardEl.classList.remove('fx-card-ultra-rare');
+
+  const isSpecial = SPECIAL_COLOR_FX.includes(result.color);
+
+  if (isSpecial) {
+    // Animated text effect
+    nameEl.classList.add(`fx-${result.color}`);
+    // Animated card border/glow — remove competing inline styles first
+    cardEl.style.removeProperty('border-color');
+    cardEl.style.removeProperty('box-shadow');
+    cardEl.style.setProperty('--rank-color', SPECIAL_COLOR_FALLBACKS[result.color]);
+    cardEl.classList.add(`fx-card-${result.color}`);
+  } else {
+    // Plain hex colour — apply inline styles directly
+    nameEl.style.color = result.color;
+    cardEl.style.borderColor = result.color;
+    cardEl.style.boxShadow = `0 0 18px ${result.color}88`;
+    cardEl.style.setProperty('--rank-color', result.color);
+  }
+
+  // Extra pulsing glow for high-rarity drops (rarityLevel >= 10)
+  if (result.rarityLevel >= 10) {
+    cardEl.classList.add('fx-card-ultra-rare');
+  }
+
+  // Roll pop animation — force reflow to restart if already active
+  cardEl.classList.remove('roll-animate');
+  void cardEl.offsetWidth;
+  cardEl.classList.add('roll-animate');
+}
+
 /**
  * Show the result of the most recent (or best) roll.
  *
@@ -80,28 +180,15 @@ function renderStats(stats) {
 function renderRollResult(rolledRanks) {
   if (!rolledRanks || rolledRanks.length === 0) return;
 
-  // Pick the rarest rank from the batch to display
+  // Pick the rarest rank from the batch to display (highest rarityLevel wins)
   const best = rolledRanks.reduce((prev, cur) =>
-    RANKS.findIndex((r) => r.id === cur.id) >
-    RANKS.findIndex((r) => r.id === prev.id)
-      ? cur
-      : prev
+    cur.rarityLevel > prev.rarityLevel ? cur : prev
   );
 
-  UI.rollResult.textContent = `${best.emoji} ${best.name}`;
-  UI.rollResultCard.style.setProperty('--rank-color', best.color);
-  UI.rollResultCard.style.borderColor = best.color;
-  UI.rollResultCard.style.boxShadow = `0 0 18px ${best.color}88`;
-
-  // Animate
-  UI.rollResultCard.classList.remove('roll-animate');
-  // Force reflow to restart animation
-  void UI.rollResultCard.offsetWidth;
-  UI.rollResultCard.classList.add('roll-animate');
+  displayRoll(best);
 
   if (rolledRanks.length > 1) {
-    const extra = rolledRanks.length - 1;
-    UI.rollResultCard.dataset.extra = `+${extra} more`;
+    UI.rollResultCard.dataset.extra = `+${rolledRanks.length - 1} more`;
   } else {
     UI.rollResultCard.dataset.extra = '';
   }
@@ -123,18 +210,29 @@ function renderInventory(inventory) {
   }
 
   UI.inventoryList.innerHTML = entries
-    .map(
-      (entry) => `
-      <div class="inv-row" style="border-left: 4px solid ${entry.rank.color}">
-        <span class="inv-icon">${entry.rank.emoji}</span>
-        <span class="inv-name" style="color:${entry.rank.color}">${entry.rank.name}</span>
+    .map((entry) => {
+      const { rank } = entry;
+      const isSpecial = SPECIAL_COLOR_FX.includes(rank.color);
+      // Border uses a plain colour; special effects get a fallback hex
+      const borderColor = isSpecial
+        ? SPECIAL_COLOR_FALLBACKS[rank.color]
+        : rank.color;
+      // Name span: class-based animation OR inline colour
+      const nameHtml = isSpecial
+        ? `<span class="inv-name fx-${rank.color}">${rank.name}</span>`
+        : `<span class="inv-name" style="color:${rank.color}">${rank.name}</span>`;
+
+      return `
+      <div class="inv-row" style="border-left: 4px solid ${borderColor}">
+        <span class="inv-icon">${rank.emoji}</span>
+        ${nameHtml}
         <span class="inv-qty">x${fmtNumber(entry.quantity)}</span>
         <span class="inv-val">${fmtNumber(entry.totalValue)} 💰</span>
-        <button class="sell-btn" data-id="${entry.rank.id}" title="Sell all ${entry.rank.name}">
+        <button class="sell-btn" data-id="${rank.id}" title="Sell all ${rank.name}">
           Sell All
         </button>
-      </div>`
-    )
+      </div>`;
+    })
     .join('');
 }
 
@@ -216,10 +314,14 @@ function renderOdds(luckLevel) {
     .reverse() // rarest first
     .map((c) => {
       const rank = RANKS.find((r) => r.id === c.id);
+      const isSpecial = SPECIAL_COLOR_FX.includes(rank.color);
+      const nameHtml = isSpecial
+        ? `<span class="fx-${rank.color}">${rank.name}</span>`
+        : `<span style="color:${rank.color}">${rank.name}</span>`;
       return `
         <tr>
-          <td>${rank.emoji} <span style="color:${rank.color}">${rank.name}</span></td>
-          <td>${c.chance.toFixed(3)}%</td>
+          <td>${rank.emoji} ${nameHtml}</td>
+          <td>${fmtChance(c.chance)}</td>
           <td>${fmtNumber(rank.value)} 💰</td>
         </tr>`;
     })
