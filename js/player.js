@@ -45,7 +45,7 @@ const UPGRADE_DEFS = {
     id: 'autoRoll',
     label: '🤖 Auto-Roll',
     description: 'Automatically rolls for you.',
-    baseCost: 500,
+    baseCost: 10000,
     costMult: 1, // one-time unlock; cost never changes
     maxLevel: 1,
   },
