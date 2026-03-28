@@ -611,3 +611,192 @@ header p.subtitle {
 .fx-card-ultra-rare {
   animation: ultraRareGlow 2s ease-in-out infinite;
 }
+
+/* ================================================================
+   Rarity-Based Animation System — Levels 1–10
+   Keyframes are applied via inline styles in ui.js so they don't
+   conflict with the existing fx-card-* class animations.
+   ================================================================ */
+
+/* ---- Build-up pulse (card pulses with ??? before reveal, levels 6–10) ---- */
+@keyframes buildUpPulse {
+  0%   { transform: scale(1.00); filter: brightness(0.85); }
+  50%  { transform: scale(1.06); filter: brightness(1.6) drop-shadow(0 0 24px var(--rank-color, #fff)); }
+  100% { transform: scale(1.00); filter: brightness(0.85); }
+}
+
+/* ---- Level entrance animations ---- */
+
+/* Level 1 — Immortal (~0.5 s): soft fade */
+@keyframes enterLevel1 {
+  0%   { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1.00); }
+}
+
+/* Level 2 — Eternal (~0.7 s): fade + glow rise */
+@keyframes enterLevel2 {
+  0%   { opacity: 0; transform: scale(0.88);              filter: brightness(0.4); }
+  65%  { opacity: 1; transform: scale(1.06);              filter: brightness(1.4); }
+  100% { opacity: 1; transform: scale(1.00);              filter: brightness(1.0); }
+}
+
+/* Level 3 — Celestial (~1.0 s): pop + glow */
+@keyframes enterLevel3 {
+  0%   { opacity: 0; transform: scale(0.80) translateY( 8px); filter: brightness(0.3); }
+  50%  { opacity: 1; transform: scale(1.10) translateY(-3px); filter: brightness(1.7); }
+  75%  { opacity: 1; transform: scale(0.97);                  filter: brightness(1.1); }
+  100% { opacity: 1; transform: scale(1.00);                  filter: brightness(1.0); }
+}
+
+/* Level 4 — Transcendent (~1.3 s): dramatic burst */
+@keyframes enterLevel4 {
+  0%   { opacity: 0;   transform: scale(0.72) translateY(14px); filter: brightness(0.2) blur(3px); }
+  35%  { opacity: 0.8; transform: scale(1.15) translateY(-5px); filter: brightness(2.2) blur(0);   }
+  60%  { opacity: 1;   transform: scale(0.96);                  filter: brightness(1.2);            }
+  80%  {               transform: scale(1.04); }
+  100% { opacity: 1;   transform: scale(1.00); filter: brightness(1.0); }
+}
+
+/* Level 5 — Ruler (~1.6 s): strong burst + multi-bounce */
+@keyframes enterLevel5 {
+  0%   { opacity: 0;   transform: scale(0.65) translateY(20px); filter: brightness(0.1) blur(6px); }
+  25%  { opacity: 0.7; transform: scale(1.22) translateY(-8px); filter: brightness(2.8) blur(0);   }
+  50%  { opacity: 1;   transform: scale(0.93);                  filter: brightness(1.3);            }
+  65%  {               transform: scale(1.07); }
+  80%  {               transform: scale(0.98); }
+  100% { opacity: 1;   transform: scale(1.00); filter: brightness(1.0); }
+}
+
+/* Level 6 — Overlord (~2.0 s): intense flash reveal */
+@keyframes enterLevel6 {
+  0%   { opacity: 0;   transform: scale(0.55);  filter: brightness(0)   blur(10px); }
+  20%  { opacity: 0.9; transform: scale(1.28);  filter: brightness(3.5) blur(0);    }
+  45%  { opacity: 1;   transform: scale(0.91);  filter: brightness(1.5);            }
+  65%  {               transform: scale(1.09);  filter: brightness(1.1);            }
+  82%  {               transform: scale(0.97); }
+  100% { opacity: 1;   transform: scale(1.00);  filter: brightness(1.0); }
+}
+
+/* Level 7 — Cosmic (~2.4 s): sweeping glow entrance */
+@keyframes enterLevel7 {
+  0%   { opacity: 0;   transform: scale(0.45) rotate(-3deg); filter: brightness(0)   blur(14px); }
+  15%  { opacity: 0.6; transform: scale(1.32) rotate( 2deg); filter: brightness(4.5) blur(0);    }
+  35%  { opacity: 1;   transform: scale(0.88) rotate( 0deg); filter: brightness(1.8);            }
+  55%  {               transform: scale(1.12);               filter: brightness(1.2);            }
+  70%  {               transform: scale(0.96); }
+  85%  {               transform: scale(1.04); }
+  100% { opacity: 1;   transform: scale(1.00); filter: brightness(1.0); }
+}
+
+/* Level 8 — Infinity (~2.8 s): explosive entrance */
+@keyframes enterLevel8 {
+  0%   { opacity: 0; transform: scale(0.28) rotate(-6deg); filter: brightness(0)   blur(22px) saturate(0);   }
+  12%  { opacity: 1; transform: scale(1.42) rotate( 3deg); filter: brightness(5.5) blur(0)    saturate(2.5); }
+  30%  { opacity: 1; transform: scale(0.86) rotate( 0deg); filter: brightness(2.0)            saturate(1.6); }
+  50%  {             transform: scale(1.14);               filter: brightness(1.3)            saturate(1.2); }
+  68%  {             transform: scale(0.95);               filter: brightness(1.1);                          }
+  83%  {             transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1.00); filter: brightness(1.0); }
+}
+
+/* Level 9 — Singularity (~3.2 s): implosion-explosion */
+@keyframes enterLevel9 {
+  0%   { opacity: 0; transform: scale(2.20) rotate(12deg);  filter: brightness(0)   blur(30px) saturate(0);   }
+  8%   { opacity: 0; transform: scale(0.08) rotate(-5deg);  filter: brightness(0);                            }
+  18%  { opacity: 1; transform: scale(1.55) rotate( 3deg);  filter: brightness(7.0)            saturate(3.5); }
+  35%  { opacity: 1; transform: scale(0.83) rotate( 0deg);  filter: brightness(2.2)            saturate(1.9); }
+  55%  {             transform: scale(1.17);                filter: brightness(1.4)            saturate(1.3); }
+  70%  {             transform: scale(0.94);                filter: brightness(1.15);                         }
+  84%  {             transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1.00); filter: brightness(1.0); }
+}
+
+/* Level 10 — Reality Breaker (~3.6 s): maximum impact */
+@keyframes enterLevel10 {
+  0%   { opacity: 0; transform: scale(3.00) rotate( 16deg); filter: brightness(0)   blur(44px) saturate(0) hue-rotate(  0deg); }
+  5%   { opacity: 0; transform: scale(0.04);                filter: brightness(0);                                              }
+  15%  { opacity: 1; transform: scale(1.65) rotate(-4deg);  filter: brightness(9.0)            saturate(4.0) hue-rotate( 90deg); }
+  28%  { opacity: 1; transform: scale(0.78) rotate( 1deg);  filter: brightness(3.0)            saturate(2.2) hue-rotate(180deg); }
+  42%  {             transform: scale(1.20) rotate( 0deg);  filter: brightness(2.0)            saturate(1.6) hue-rotate(270deg); }
+  58%  {             transform: scale(0.91);                filter: brightness(1.3)            saturate(1.2) hue-rotate(360deg); }
+  72%  {             transform: scale(1.08);                filter: brightness(1.15);                                            }
+  86%  {             transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1.00); filter: brightness(1.0); }
+}
+
+/* ---- Screen shake applied to .wrapper for levels 8–10 ---- */
+@keyframes screenShake8 {
+  0%,100% { transform: translate(0,    0); }
+  15%     { transform: translate(-3px,-2px); }
+  30%     { transform: translate( 4px, 2px); }
+  45%     { transform: translate(-4px, 2px); }
+  60%     { transform: translate( 3px,-2px); }
+  75%     { transform: translate(-2px, 3px); }
+  90%     { transform: translate( 2px,-1px); }
+}
+
+@keyframes screenShake9 {
+  0%,100% { transform: translate(0,     0)    rotate( 0.0deg); }
+  10%     { transform: translate(-5px, -3px)  rotate(-0.3deg); }
+  20%     { transform: translate( 6px,  3px)  rotate( 0.3deg); }
+  30%     { transform: translate(-7px,  4px)  rotate(-0.3deg); }
+  40%     { transform: translate( 7px, -4px)  rotate( 0.3deg); }
+  55%     { transform: translate(-5px,  3px); }
+  65%     { transform: translate( 5px, -3px); }
+  75%     { transform: translate(-3px,  5px); }
+  85%     { transform: translate( 3px, -5px); }
+  93%     { transform: translate(-1px,  2px); }
+}
+
+@keyframes screenShake10 {
+  0%,100% { transform: translate(0,      0)    rotate( 0.0deg); }
+  8%      { transform: translate( -8px, -4px)  rotate(-0.5deg); }
+  16%     { transform: translate(  9px,  5px)  rotate( 0.5deg); }
+  24%     { transform: translate(-10px,  5px)  rotate(-0.4deg); }
+  32%     { transform: translate( 10px, -5px)  rotate( 0.4deg); }
+  40%     { transform: translate( -8px,  4px)  rotate(-0.3deg); }
+  48%     { transform: translate(  8px, -4px)  rotate( 0.3deg); }
+  56%     { transform: translate( -5px,  6px); }
+  64%     { transform: translate(  5px, -6px); }
+  72%     { transform: translate( -3px,  4px); }
+  80%     { transform: translate(  3px, -4px); }
+  90%     { transform: translate( -1px,  2px); }
+}
+
+/* Durations below must match SCREEN_SHAKE_DURATION_MS in ui.js */
+.screen-shake-8  { animation: screenShake8  0.5s ease-in-out; }
+.screen-shake-9  { animation: screenShake9  0.7s ease-in-out; }
+.screen-shake-10 { animation: screenShake10 0.9s ease-in-out; }
+
+/* ---- Background flash overlay for top-5 ranks ---- */
+#rare-flash-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 0;
+}
+
+@keyframes bgFlash {
+  0%   { opacity: 0; }
+  10%  { opacity: var(--flash-max, 0.15); }
+  100% { opacity: 0; }
+}
+
+#rare-flash-overlay.flash-active {
+  animation: bgFlash 1.2s ease-out forwards;
+}
+
+/* ---- Rank particles (sparkles / energy) for levels 5–10 ---- */
+.rank-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+@keyframes particleFly {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--px, 0px)), calc(-50% + var(--py, 0px))) scale(0); opacity: 0; }
+}
