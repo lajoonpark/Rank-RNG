@@ -112,38 +112,39 @@ class PitySystem {
    *      - Natural hit → progress reset to 0
    *      - Otherwise   → progress += count
    *
-   * @param {number} count – number of rolls in this batch (≥ 1)
-   * @param {number} luck  – player's current luck level
+   * @param {number} count       – number of rolls in this batch (≥ 1)
+   * @param {number} luck        – player's current luck level
+   * @param {object} [areaBoosts={}] – rank boost multipliers from the active area
    * @returns {{ rank: object, isPityReward: boolean }[]} one entry per roll
    */
-  processRolls(count, luck) {
+  processRolls(count, luck, areaBoosts = {}) {
     if (this._processing) {
       // Safety fallback: should never happen in normal single-threaded execution
-      return Array.from({ length: count }, () => ({ rank: rollItem(luck), isPityReward: false }));
+      return Array.from({ length: count }, () => ({ rank: rollItem(luck, areaBoosts), isPityReward: false }));
     }
 
     this._processing = true;
     try {
-      return this._doProcessRolls(count, luck);
+      return this._doProcessRolls(count, luck, areaBoosts);
     } finally {
       this._processing = false;
     }
   }
 
   /** @private */
-  _doProcessRolls(count, luck) {
+  _doProcessRolls(count, luck, areaBoosts = {}) {
     const config = this.getTargetConfig();
 
     // ---- No target: normal rolls, no pity tracking ----
     if (!config) {
-      return Array.from({ length: count }, () => ({ rank: rollItem(luck), isPityReward: false }));
+      return Array.from({ length: count }, () => ({ rank: rollItem(luck, areaBoosts), isPityReward: false }));
     }
 
     const savedProgress = this.progress[this.targetId];
     const threshold     = config.threshold;
 
     // Roll the entire batch through normal RNG first
-    const rawRanks = Array.from({ length: count }, () => rollItem(luck));
+    const rawRanks = Array.from({ length: count }, () => rollItem(luck, areaBoosts));
 
     // ---- Pity fires this batch ----
     if (savedProgress + count >= threshold) {

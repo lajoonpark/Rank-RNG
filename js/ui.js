@@ -484,8 +484,9 @@ function animateCooldownBar(durationMs) {
 // ---------------------------------------------------------------------------
 // Odds table (shown in a collapsible section)
 // ---------------------------------------------------------------------------
-function renderOdds(luckLevel) {
-  const chances = getDropChances(luckLevel);
+function renderOdds(luckLevel, areaBoosts = {}) {
+  const chances = getDropChances(luckLevel, areaBoosts);
+  const boostedIds = Object.keys(areaBoosts);
   UI.oddsTable.innerHTML = chances
     .slice()
     .reverse() // rarest first
@@ -495,9 +496,12 @@ function renderOdds(luckLevel) {
       const nameHtml = isSpecial
         ? `<span class="fx-${rank.color}">${rank.name}</span>`
         : `<span style="color:${rank.color}">${rank.name}</span>`;
+      const boostedMark = boostedIds.includes(rank.id)
+        ? ' <span class="odds-boost-mark" title="Boosted by active area">▲</span>'
+        : '';
       return `
         <tr>
-          <td>${rank.emoji} ${nameHtml}</td>
+          <td>${rank.emoji} ${nameHtml}${boostedMark}</td>
           <td>${fmtChance(c.chance)}</td>
           <td>${fmtNumber(rank.value)} 💰</td>
         </tr>`;
@@ -611,4 +615,37 @@ function renderPity(pitySystem) {
   // Visual charge states (based on fill percentage)
   progressArea.classList.toggle('pity-close',   pct >= 80 && pct < 95);
   progressArea.classList.toggle('pity-charged', pct >= 95);
+}
+
+// ---------------------------------------------------------------------------
+// Active Area indicator (displayed on the roll panel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Update the active-area indicator strip on the roll panel.
+ * Safe to call with a null areaSystem.
+ *
+ * @param {AreaSystem|null} areaSystem
+ */
+function renderActiveArea(areaSystem) {
+  const indicator = document.getElementById('active-area-indicator');
+  if (!indicator) return;
+
+  if (!areaSystem) {
+    indicator.style.display = 'none';
+    return;
+  }
+
+  const area = areaSystem.getActiveArea();
+  const emojiEl = document.getElementById('active-area-emoji');
+  const nameEl  = document.getElementById('active-area-name');
+  const hintEl  = document.getElementById('active-area-hint');
+
+  if (emojiEl) emojiEl.textContent = area.emoji;
+  if (nameEl)  nameEl.textContent  = area.name;
+  if (hintEl)  hintEl.textContent  = area.boostHint;
+
+  // Apply the area's accent colour as a CSS custom property on the indicator
+  indicator.style.setProperty('--area-accent', area.theme.accentColor);
+  indicator.style.display = 'flex';
 }
