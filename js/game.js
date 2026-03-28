@@ -100,6 +100,9 @@ function doRoll() {
 
     inventory.addRank(rank, value);
     player.earn(value + CURRENCY_PER_ROLL);
+    // rolledRanks holds plain rank objects — used for the cutscene pipeline which
+    // needs only rank metadata.  The full results array (with isPityReward) is
+    // passed directly to renderRollResult for badge rendering.
     rolledRanks.push(rank);
 
     if (isPityReward) {

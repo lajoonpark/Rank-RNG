@@ -350,7 +350,7 @@ function renderRollResult(rolledItems) {
   // Normalise: support both plain rank objects and { rank, isPityReward } shape
   const items = rolledItems.map((item) =>
     item && typeof item === 'object' && 'rank' in item
-      ? item
+      ? { rank: item.rank, isPityReward: item.isPityReward ?? false }
       : { rank: item, isPityReward: false }
   );
 
