@@ -102,11 +102,60 @@
   <!-- Toast notification -->
   <div id="toast" role="status" aria-live="polite"></div>
 
+  <!-- ── Developer Mode Panel (hidden until correct passcode entered) ── -->
+  <div id="dev-panel" class="dev-panel" style="display:none;" role="complementary" aria-label="Developer Panel">
+    <div class="dev-panel-header">
+      <span>🛠 Dev Mode</span>
+      <button id="dev-close-btn" aria-label="Close developer panel">✕</button>
+    </div>
+    <div class="dev-panel-body">
+
+      <!-- Luck multiplier slider -->
+      <div class="dev-control">
+        <label for="dev-luck-mult">Luck Multiplier: <span id="dev-luck-mult-val">1x</span></label>
+        <input type="range" id="dev-luck-mult" min="0" max="100" step="0.5" value="1" aria-label="Luck multiplier">
+      </div>
+
+      <!-- Set player coins -->
+      <div class="dev-control">
+        <label for="dev-money-input">Set Coins</label>
+        <div class="dev-row">
+          <input type="number" id="dev-money-input" min="0" step="1" value="0" placeholder="Amount" aria-label="Set coins amount">
+          <button id="dev-money-btn">Set</button>
+        </div>
+      </div>
+
+      <!-- Force specific rank roll -->
+      <div class="dev-control">
+        <label for="dev-force-rank">Force Rank</label>
+        <div class="dev-row">
+          <select id="dev-force-rank" aria-label="Force rank dropdown">
+            <option value="">— Normal Roll —</option>
+          </select>
+          <button id="dev-force-roll-btn">Roll</button>
+        </div>
+      </div>
+
+      <!-- Trigger multi-roll manually -->
+      <div class="dev-control">
+        <button id="dev-multi-roll-btn">🎲 Trigger Multi-Roll</button>
+      </div>
+
+      <!-- Guaranteed rare+ toggle -->
+      <div class="dev-control dev-toggle">
+        <label for="dev-guaranteed-rare">Guaranteed Rare+</label>
+        <input type="checkbox" id="dev-guaranteed-rare" aria-label="Toggle guaranteed rare rolls">
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── Scripts (load order matters) ──────────────────────── -->
   <script src="js/rng.js"></script>
   <script src="js/player.js"></script>
   <script src="js/inventory.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/devmode.js"></script>
 </body>
 </html>
