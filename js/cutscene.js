@@ -376,6 +376,7 @@ let _particles = [];
 let _animFrameId = null;
 let _particlePhase = 'idle'; // 'suspense' | 'burst' | 'drift' | 'idle'
 let _currentCfg = null;
+let _customCanvasDraw = null; // optional per-frame draw fn set by special cutscenes
 
 function _setupCanvas() {
   _canvas = document.getElementById('cutscene-canvas');
@@ -568,6 +569,7 @@ function _tickParticles() {
     }
   }
 
+  if (typeof _customCanvasDraw === 'function') _customCanvasDraw(_canvasCtx, _canvas);
   _animFrameId = requestAnimationFrame(_tickParticles);
 }
 
@@ -936,12 +938,857 @@ function _playOverlordCutscene(rank, onDone) {
   });
 }
 
-function _playSingleCutscene(rank, onDone) {
-  // Overlord has its own bespoke cinematic sequence
-  if (rank.name === 'Overlord') {
-    _playOverlordCutscene(rank, onDone);
-    return;
+// ---------------------------------------------------------------------------
+// Shared helper — standard DOM/state reset used by all special cutscenes
+// ---------------------------------------------------------------------------
+function _resetSpecialCutsceneDOM(cfg) {
+  _dom.suspense.style.display = 'none';
+  _dom.reveal.style.display = 'none';
+  _dom.reveal.classList.remove('cutscene-reveal-enter');
+  _dom.subtitle.classList.remove('cutscene-subtitle-enter');
+  _dom.overlay.classList.remove('cutscene-fade-out');
+  _dom.glow.style.opacity = '0';
+  _dom.glow.style.transition = '';
+  _dom.bgFx.style.background = '';
+  _dom.bgFx.style.animation = '';
+  _dom.bgFx.classList.remove('cutscene-bg-glitch', 'cutscene-bg-void', 'cutscene-bg-cosmic');
+  _dom.scanlines.style.display = 'none';
+  _particles = [];
+
+  _dom.overlay.style.background = '#000000';
+  _dom.rankName.className = 'cutscene-rank-name';
+  _dom.rankName.style.color = cfg.color;
+  _dom.rankName.style.textShadow = `0 0 40px ${cfg.color}cc, 0 0 80px ${cfg.color}66`;
+  _dom.glow.style.background =
+    `radial-gradient(circle, ${cfg.color}44 0%, ${cfg.color}11 50%, transparent 70%)`;
+
+  _dom.overlay.style.display = 'flex';
+  _dom.overlay.style.opacity = '1';
+  _dom.overlay.style.transition = '';
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper — standard reveal + effects + fade-out tail used by specials
+// ---------------------------------------------------------------------------
+function _playRevealTail(cfg, startElapsed, onDone) {
+  let t = startElapsed;
+
+  _after(t, () => {
+    _dom.reveal.style.display = 'flex';
+    _dom.reveal.classList.add('cutscene-reveal-enter');
+    _particlePhase = 'burst';
+    _spawnBurstParticles(cfg);
+    _triggerRevealFlash(cfg);
+    _shakeOverlay(cfg.level);
+    _dom.glow.style.transition = `opacity ${cfg.revealMs}ms ease`;
+    _dom.glow.style.opacity = '0.7';
+    _after(Math.floor(cfg.revealMs * 0.6), () => _dom.subtitle.classList.add('cutscene-subtitle-enter'));
+  });
+  t += cfg.revealMs;
+
+  _after(t, () => {
+    _particlePhase = 'drift';
+    _spawnEffectParticles(cfg);
+    if (cfg.shake) {
+      _after(Math.floor(cfg.effectsMs * 0.3), () => _shakeOverlay(cfg.level));
+      _after(Math.floor(cfg.effectsMs * 0.6), () => _shakeOverlay(cfg.level));
+    }
+  });
+  t += cfg.effectsMs;
+
+  _after(t, () => {
+    _dom.overlay.style.transition = `opacity ${cfg.fadeOutMs}ms ease`;
+    _dom.overlay.style.opacity = '0';
+  });
+  t += cfg.fadeOutMs;
+
+  _after(t, () => { _teardownCutscene(); onDone(); });
+}
+
+// ---------------------------------------------------------------------------
+// Reality Breaker special cutscene — reality fractures
+// ---------------------------------------------------------------------------
+function _playRealityBreakerCutscene(rank, onDone) {
+  const cfg = CUTSCENE_CONFIG[rank.name];
+  if (!cfg) { onDone(); return; }
+
+  _currentRankName = rank.name;
+  _currentCfg = cfg;
+  _dom.rankName.textContent = `${rank.emoji || ''} ${rank.name}`;
+  _dom.subtitle.textContent = cfg.subtitle || '';
+  _resetSpecialCutsceneDOM(cfg);
+
+  // ── Build DOM elements ──────────────────────────────────────────────────
+  const introText = document.createElement('div');
+  introText.className = 'rb-intro-text';
+  introText.textContent = '"reality was not meant to be broken"';
+  _dom.overlay.appendChild(introText);
+
+  const crackContainer = document.createElement('div');
+  crackContainer.className = 'rb-crack-container';
+  _dom.overlay.appendChild(crackContainer);
+
+  const rbBolt = document.createElement('div');
+  rbBolt.className = 'rb-bolt';
+  rbBolt.textContent = '⚡';
+  _dom.overlay.appendChild(rbBolt);
+
+  const rbWhiteout = document.createElement('div');
+  rbWhiteout.className = 'rb-whiteout';
+  _dom.overlay.appendChild(rbWhiteout);
+
+  function _cleanup() {
+    introText.remove(); crackContainer.remove();
+    rbBolt.remove();    rbWhiteout.remove();
+    _customCanvasDraw = null;
   }
+  _pendingCleanup = _cleanup;
+
+  // ── Canvas lightning ────────────────────────────────────────────────────
+  const _rbBolts = [];
+
+  function _genBoltPath(x1, y1, x2, y2, steps, jitter) {
+    const pts = [{ x: x1, y: y1 }];
+    for (let i = 1; i < steps; i++) {
+      const frac = i / steps;
+      pts.push({
+        x: x1 + (x2 - x1) * frac + (Math.random() - 0.5) * jitter,
+        y: y1 + (y2 - y1) * frac + (Math.random() - 0.5) * jitter * 0.4,
+      });
+    }
+    pts.push({ x: x2, y: y2 });
+    return pts;
+  }
+
+  _customCanvasDraw = function(ctx, canvas) {
+    for (let i = _rbBolts.length - 1; i >= 0; i--) {
+      const b = _rbBolts[i];
+      b.life -= b.decay;
+      if (b.life <= 0) { _rbBolts.splice(i, 1); continue; }
+      if (b.pts.length < 2) continue;
+      // Outer glow
+      ctx.save();
+      ctx.globalAlpha = b.life * 0.4;
+      ctx.strokeStyle = '#88ccff';
+      ctx.lineWidth = (b.lw || 2) * 3;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#88ccff';
+      ctx.beginPath();
+      ctx.moveTo(b.pts[0].x, b.pts[0].y);
+      for (let j = 1; j < b.pts.length; j++) ctx.lineTo(b.pts[j].x, b.pts[j].y);
+      ctx.stroke();
+      ctx.restore();
+      // Bright core
+      ctx.save();
+      ctx.globalAlpha = b.life;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = b.lw || 2;
+      ctx.beginPath();
+      ctx.moveTo(b.pts[0].x, b.pts[0].y);
+      for (let j = 1; j < b.pts.length; j++) ctx.lineTo(b.pts[j].x, b.pts[j].y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  function _flashBolts(count) {
+    const cw = (_canvas && _canvas.width)  || window.innerWidth;
+    const ch = (_canvas && _canvas.height) || window.innerHeight;
+    for (let i = 0; i < count; i++) {
+      _after(i * 200, () => {
+        _rbBolts.push({
+          pts: _genBoltPath(
+            (0.1 + Math.random() * 0.8) * cw, 0,
+            (0.1 + Math.random() * 0.8) * cw, (0.5 + Math.random() * 0.5) * ch,
+            10 + Math.floor(Math.random() * 6), 70
+          ),
+          life: 1.0, lw: 1.5 + Math.random() * 1.5,
+          decay: 0.055 + Math.random() * 0.035,
+        });
+      });
+    }
+  }
+
+  function _addCracks(count) {
+    for (let i = 0; i < count; i++) {
+      const c = document.createElement('div');
+      c.className = 'rb-crack';
+      c.style.left  = (15 + Math.random() * 70) + '%';
+      c.style.top   = (15 + Math.random() * 70) + '%';
+      c.style.width = (60 + Math.random() * 120) + 'px';
+      c.style.transform = `rotate(${(Math.random() * 180 - 90).toFixed(1)}deg)`;
+      crackContainer.appendChild(c);
+      setTimeout(() => { c.style.opacity = (0.4 + Math.random() * 0.5).toFixed(2); }, 40);
+    }
+  }
+
+  _startParticleLoop();
+  _playSound(cfg.soundType, cfg.level);
+
+  let t = 0;
+
+  // Phase 1: Cracks begin appearing
+  _after(200, () => _addCracks(3));
+  _after(420, () => _flashBolts(1));
+  _after(620, () => _addCracks(2));
+  _after(800, () => _flashBolts(1));
+  _after(950, () => _addCracks(3));
+  t = 1050;
+
+  // Phase 2: Intro text glitches in
+  _after(t, () => {
+    introText.style.transition = 'opacity 650ms ease, letter-spacing 650ms ease';
+    introText.style.opacity = '1';
+    introText.style.letterSpacing = '3px';
+    introText.classList.add('rb-text-glitch');
+    _dom.scanlines.style.display = 'block';
+  });
+  t += 650;
+
+  _after(t + 200, () => _flashBolts(2));
+  _after(t + 750, () => { _addCracks(4); _flashBolts(2); });
+  t += 1450;
+
+  // Phase 2b: Text glitches out
+  _after(t, () => {
+    introText.style.transition = 'opacity 450ms ease';
+    introText.style.opacity = '0';
+    introText.classList.remove('rb-text-glitch');
+  });
+  t += 550;
+
+  // Phase 3: Cracks spread, screen warps
+  _after(t, () => {
+    _addCracks(5);
+    _dom.bgFx.classList.add('cutscene-bg-glitch');
+    crackContainer.classList.add('rb-crack-container-active');
+    _flashBolts(3);
+  });
+  t += 700;
+
+  // Phase 4: Lightning strikes center
+  _after(t, () => {
+    const cw = (_canvas && _canvas.width)  || window.innerWidth;
+    const ch = (_canvas && _canvas.height) || window.innerHeight;
+    _rbBolts.push({
+      pts: _genBoltPath(cw / 2 + (Math.random() - 0.5) * 100, 0, cw / 2, ch / 2, 12, 55),
+      life: 1.6, lw: 4, decay: 0.022,
+    });
+    rbWhiteout.style.transition = 'opacity 120ms ease-in';
+    rbWhiteout.style.opacity = '0.55';
+    _after(180, () => {
+      rbWhiteout.style.transition = 'opacity 420ms ease-out';
+      rbWhiteout.style.opacity = '0';
+    });
+  });
+  t += 700;
+
+  // Phase 5: ⚡ symbol appears
+  _after(t, () => {
+    rbBolt.style.transition = 'opacity 280ms ease, transform 280ms ease';
+    rbBolt.style.opacity = '1';
+    rbBolt.style.transform = 'translate(-50%, -50%) scale(1)';
+    rbBolt.classList.add('rb-bolt-active');
+  });
+  t += 380;
+
+  // Phase 6: Lightning pulses (3 times)
+  _after(t,       () => _flashBolts(1));
+  _after(t + 500, () => _flashBolts(2));
+  _after(t + 950, () => _flashBolts(2));
+  t += 1250;
+
+  // Phase 7: Flash white
+  _after(t, () => {
+    rbWhiteout.style.transition = 'opacity 350ms ease-in';
+    rbWhiteout.style.opacity = '1';
+    rbBolt.classList.remove('rb-bolt-active');
+    _dom.bgFx.classList.remove('cutscene-bg-glitch');
+    _dom.scanlines.style.display = 'none';
+    crackContainer.style.transition = 'opacity 200ms ease';
+    crackContainer.style.opacity = '0';
+  });
+  t += 450;
+
+  // Phase 8: Fade back to black
+  _after(t, () => {
+    rbBolt.style.transition = 'opacity 300ms ease';
+    rbBolt.style.opacity = '0';
+    rbWhiteout.style.transition = 'opacity 650ms ease-out';
+    rbWhiteout.style.opacity = '0';
+  });
+  t += 750;
+
+  _playRevealTail(cfg, t, onDone);
+}
+
+// ---------------------------------------------------------------------------
+// Singularity special cutscene — black hole, gravity pull
+// ---------------------------------------------------------------------------
+function _playSingularityCutscene(rank, onDone) {
+  const cfg = CUTSCENE_CONFIG[rank.name];
+  if (!cfg) { onDone(); return; }
+
+  _currentRankName = rank.name;
+  _currentCfg = cfg;
+  _dom.rankName.textContent = `${rank.emoji || ''} ${rank.name}`;
+  _dom.subtitle.textContent = cfg.subtitle || '';
+  _resetSpecialCutsceneDOM(cfg);
+
+  // ── Build DOM elements ──────────────────────────────────────────────────
+  const introText = document.createElement('div');
+  introText.className = 'sing-intro-text';
+  introText.textContent = '"everything returns to one point"';
+  _dom.overlay.appendChild(introText);
+
+  // Ring and hole centered on overlay
+  const singWrap = document.createElement('div');
+  singWrap.className = 'sing-hole-wrap';
+  const singHole = document.createElement('div');
+  singHole.className = 'sing-hole';
+  const singRing = document.createElement('div');
+  singRing.className = 'sing-ring';
+  singWrap.appendChild(singHole);
+  singWrap.appendChild(singRing);
+  _dom.overlay.appendChild(singWrap);
+
+  const singPoint = document.createElement('div');
+  singPoint.className = 'sing-collapse-point';
+  _dom.overlay.appendChild(singPoint);
+
+  const singWhiteout = document.createElement('div');
+  singWhiteout.className = 'sing-whiteout';
+  _dom.overlay.appendChild(singWhiteout);
+
+  function _cleanup() {
+    introText.remove(); singWrap.remove();
+    singPoint.remove(); singWhiteout.remove();
+    _customCanvasDraw = null;
+  }
+  _pendingCleanup = _cleanup;
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function _vmin() { return Math.min(window.innerWidth, window.innerHeight); }
+
+  function _setRingSize(frac, durMs) {
+    const sz  = Math.floor(_vmin() * frac);
+    const hSz = Math.floor(sz * 0.78);
+    const tr  = `width ${durMs}ms ease, height ${durMs}ms ease`;
+    singRing.style.transition = tr;
+    singHole.style.transition  = tr;
+    singRing.style.width  = singRing.style.height = sz + 'px';
+    singHole.style.width  = singHole.style.height = hSz + 'px';
+  }
+
+  function _spawnStars() {
+    const cw = (_canvas && _canvas.width)  || window.innerWidth;
+    const ch = (_canvas && _canvas.height) || window.innerHeight;
+    for (let i = 0; i < 180; i++) {
+      _particles.push({
+        x: Math.random() * cw, y: Math.random() * ch,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        size: 1 + Math.random() * 2,
+        color: _randomColor(['#ffffff', '#ccddff', '#aabbee', '#8899cc']),
+        opacity: 0.2 + Math.random() * 0.7,
+        life: 1, decay: 0.00015 + Math.random() * 0.0002,
+        type: 'drift',
+      });
+    }
+  }
+
+  _startParticleLoop();
+  _playSound(cfg.soundType, cfg.level);
+  _spawnStars();
+
+  let t = 0;
+
+  // Phase 1: Stars drift, then vortex pulls them inward
+  _after(600, () => {
+    _particlePhase = 'drift'; // triggers _applyVortex since soundType === 'void'
+    _dom.bgFx.classList.add('cutscene-bg-void');
+  });
+  t = 1400;
+
+  _after(t, () => _spawnStars()); // second wave for density
+  t += 300;
+
+  // Phase 2: Intro text
+  _after(t, () => {
+    introText.style.transition = 'opacity 700ms ease, letter-spacing 700ms ease';
+    introText.style.opacity = '1';
+    introText.style.letterSpacing = '3px';
+  });
+  t += 700 + 1000; // fade-in + hold
+
+  // Phase 2b: Text out
+  _after(t, () => {
+    introText.style.transition = 'opacity 550ms ease';
+    introText.style.opacity = '0';
+  });
+  t += 650;
+
+  // Phase 3: Singularity ring forms
+  _after(t, () => {
+    singWrap.style.transition = 'opacity 500ms ease';
+    singWrap.style.opacity = '1';
+    _setRingSize(0.12, 1400);
+  });
+  t += 1500;
+
+  // Phase 4: Ring grows, screen darkens
+  _after(t, () => {
+    singRing.classList.add('sing-ring-pulse');
+    _setRingSize(0.26, 1800);
+    _dom.overlay.style.transition = 'background 2000ms ease';
+    _dom.overlay.style.background = '#020005';
+  });
+  t += 1900;
+
+  // Phase 5: Full-size singularity, screen very dark
+  _after(t, () => {
+    _setRingSize(0.38, 1600);
+    singRing.style.boxShadow = [
+      '0 0 40px rgba(180,180,255,1)',
+      '0 0 80px rgba(150,150,255,0.7)',
+      '0 0 160px rgba(100,100,200,0.35)',
+    ].join(',');
+    _dom.overlay.style.transition = 'background 1600ms ease';
+    _dom.overlay.style.background = '#010003';
+    _dom.glow.style.transition = 'opacity 1600ms ease';
+    _dom.glow.style.opacity = '0.4';
+  });
+  t += 1700;
+
+  // Phase 6: Collapse to a point
+  _after(t, () => {
+    singRing.classList.remove('sing-ring-pulse');
+    singRing.style.transition = 'width 550ms ease-in, height 550ms ease-in, opacity 400ms ease';
+    singHole.style.transition  = 'width 550ms ease-in, height 550ms ease-in';
+    singRing.style.width  = singRing.style.height = '0';
+    singHole.style.width  = singHole.style.height = '0';
+    singRing.style.opacity = '0';
+    singPoint.style.transition = 'opacity 250ms ease';
+    singPoint.style.opacity = '1';
+    _dom.glow.style.transition = 'opacity 300ms ease';
+    _dom.glow.style.opacity = '0';
+  });
+  t += 650;
+
+  // Phase 7: Bright flash
+  _after(t, () => {
+    singPoint.style.transition = 'transform 350ms ease-out, opacity 350ms ease-out';
+    singPoint.style.transform = 'scale(40)';
+    singPoint.style.opacity = '0';
+    singWhiteout.style.transition = 'opacity 350ms ease-in';
+    singWhiteout.style.opacity = '1';
+  });
+  t += 450;
+
+  // Phase 8: Fade to black
+  _after(t, () => {
+    singWrap.style.transition = 'opacity 200ms ease';
+    singWrap.style.opacity = '0';
+    singWhiteout.style.transition = 'opacity 700ms ease-out';
+    singWhiteout.style.opacity = '0';
+    _dom.bgFx.classList.remove('cutscene-bg-void');
+    _dom.overlay.style.transition = 'background 500ms ease';
+    _dom.overlay.style.background = '#000000';
+  });
+  t += 850;
+
+  _playRevealTail(cfg, t, onDone);
+}
+
+// ---------------------------------------------------------------------------
+// Infinity special cutscene — endless loop, infinite energy
+// ---------------------------------------------------------------------------
+function _playInfinityCutscene(rank, onDone) {
+  const cfg = CUTSCENE_CONFIG[rank.name];
+  if (!cfg) { onDone(); return; }
+
+  _currentRankName = rank.name;
+  _currentCfg = cfg;
+  _dom.rankName.textContent = `${rank.emoji || ''} ${rank.name}`;
+  _dom.subtitle.textContent = cfg.subtitle || '';
+  _resetSpecialCutsceneDOM(cfg);
+
+  // ── Build DOM elements ──────────────────────────────────────────────────
+  const introText = document.createElement('div');
+  introText.className = 'inf-intro-text';
+  introText.textContent = '"there is no beginning and no end"';
+  _dom.overlay.appendChild(introText);
+
+  const infWhiteout = document.createElement('div');
+  infWhiteout.className = 'inf-whiteout';
+  _dom.overlay.appendChild(infWhiteout);
+
+  function _cleanup() {
+    introText.remove(); infWhiteout.remove();
+    _customCanvasDraw = null;
+  }
+  _pendingCleanup = _cleanup;
+
+  // ── Canvas ∞ symbol state ───────────────────────────────────────────────
+  // symbols[]: {opacity, scale, rotOffset, lineWidth, glowSize, drawStart}
+  // drawStart: the global frame-progress at which this symbol began drawing
+  const _infSymbols = [{ opacity: 1, scale: 1, rotOffset: 0, lineWidth: 3, glowSize: 22 }];
+  let _infFrameCount = 0;   // increments every canvas frame
+  let _infDrawSpeed  = 0.005; // draw progress added per frame (main symbol)
+  let _infRotSpeed   = 0;    // radians per frame added to rotation
+  let _infRotation   = 0;
+  let _infScreenFade = 0;    // 0→1 for white-fill effect
+
+  _customCanvasDraw = function(ctx, canvas) {
+    _infFrameCount++;
+    _infRotation += _infRotSpeed;
+
+    const cx = canvas.width  / 2;
+    const cy = canvas.height / 2;
+    const R  = Math.min(canvas.width, canvas.height) * 0.18;
+
+    // White fill overlay (for the "screen becomes white" phase)
+    if (_infScreenFade > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, _infScreenFade);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      return; // don't draw symbols once fully white
+    }
+
+    for (let si = 0; si < _infSymbols.length; si++) {
+      const sym = _infSymbols[si];
+      if (sym.opacity <= 0.01) continue;
+
+      // Each symbol has its own independent draw progress (0→1)
+      sym.drawProgress = Math.min(1, (sym.drawProgress || 0) + (si === 0 ? _infDrawSpeed : _infDrawSpeed * 0.7));
+
+      const endT   = sym.drawProgress * Math.PI * 2;
+      const steps  = 180;
+      const R2     = R * sym.scale;
+
+      ctx.save();
+      ctx.globalAlpha = sym.opacity;
+      ctx.translate(cx, cy);
+      ctx.rotate(_infRotation * (si === 0 ? 1 : (si % 2 === 0 ? 0.7 : -0.5)) + sym.rotOffset);
+
+      // Glow pass
+      ctx.strokeStyle = '#ff8800';
+      ctx.lineWidth = sym.lineWidth * 2.5;
+      ctx.shadowBlur = sym.glowSize * 2;
+      ctx.shadowColor = cfg.color;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = sym.opacity * 0.35;
+      ctx.beginPath();
+      for (let k = 0; k <= steps; k++) {
+        const tVal = (k / steps) * endT;
+        const x = R2 * Math.sin(2 * tVal);
+        const y = (R2 / 1.65) * Math.sin(tVal);
+        k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Core bright line
+      ctx.strokeStyle = cfg.color;
+      ctx.lineWidth = sym.lineWidth;
+      ctx.shadowBlur = sym.glowSize;
+      ctx.globalAlpha = sym.opacity;
+      ctx.beginPath();
+      for (let k = 0; k <= steps; k++) {
+        const tVal = (k / steps) * endT;
+        const x = R2 * Math.sin(2 * tVal);
+        const y = (R2 / 1.65) * Math.sin(tVal);
+        k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // White hot centre
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = sym.lineWidth * 0.35;
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = sym.opacity * 0.6;
+      ctx.beginPath();
+      for (let k = 0; k <= steps; k++) {
+        const tVal = (k / steps) * endT;
+        const x = R2 * Math.sin(2 * tVal);
+        const y = (R2 / 1.65) * Math.sin(tVal);
+        k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.restore();
+    }
+  };
+
+  _startParticleLoop();
+  _playSound(cfg.soundType, cfg.level);
+
+  let t = 0;
+
+  // Phase 1: Symbol draws itself
+  _after(100, () => { _infDrawSpeed = 0.006; });
+  t = 2900; // 0.006/frame × 60fps → ~2.8s to fully draw; add buffer
+
+  // Phase 2: Symbol fully drawn — slow rotation begins
+  _after(t, () => {
+    _infDrawSpeed = 0; // lock drawing at full
+    _infRotSpeed  = 0.004;
+  });
+
+  // Intro text
+  _after(t + 300, () => {
+    introText.style.transition = 'opacity 700ms ease, letter-spacing 700ms ease';
+    introText.style.opacity = '1';
+    introText.style.letterSpacing = '3px';
+  });
+  t += 1000;
+
+  // Hold
+  t += 1000;
+
+  // Text out
+  _after(t, () => {
+    introText.style.transition = 'opacity 500ms ease';
+    introText.style.opacity = '0';
+  });
+  t += 600;
+
+  // Phase 3: Multiple background symbols appear
+  _after(t, () => {
+    _infRotSpeed = 0.008;
+    _infDrawSpeed = 0; // extra symbols start fully drawn but fade in
+    for (let i = 1; i <= 5; i++) {
+      _infSymbols.push({
+        opacity: 0,
+        scale: 0.55 + i * 0.2,
+        rotOffset: (i / 6) * Math.PI * 2,
+        lineWidth: 1.5,
+        glowSize: 12,
+        drawProgress: 1, // pre-drawn
+      });
+    }
+    // Fade in background symbols
+    let idx = 1;
+    function _fadeNext() {
+      if (idx >= _infSymbols.length) return;
+      const sym = _infSymbols[idx++];
+      const start = performance.now();
+      const dur = 400;
+      function _tick(now) {
+        sym.opacity = Math.min(0.35, ((now - start) / dur) * 0.35);
+        if (now - start < dur) requestAnimationFrame(_tick);
+      }
+      requestAnimationFrame(_tick);
+      _after(150, _fadeNext);
+    }
+    _fadeNext();
+  });
+  t += 600;
+
+  // Phase 4: Symbols speed up, light trails
+  _after(t, () => { _infRotSpeed = 0.025; });
+  t += 700;
+
+  _after(t, () => { _infRotSpeed = 0.06; });
+  t += 500;
+
+  // Phase 5: Screen fills with light
+  _after(t, () => {
+    _infRotSpeed = 0.15;
+    // Ramp up screen fade
+    const start = performance.now();
+    const dur = 900;
+    function _tick(now) {
+      _infScreenFade = (now - start) / dur;
+      if (_infScreenFade < 1 && _infRotSpeed > 0) requestAnimationFrame(_tick);
+    }
+    requestAnimationFrame(_tick);
+  });
+  t += 950;
+
+  // Phase 6: Fade back to black
+  _after(t, () => {
+    // Canvas is now filling white; DOM overlay takes over so canvas can clear
+    infWhiteout.style.transition = 'none';
+    infWhiteout.style.opacity = '1';
+    void infWhiteout.offsetWidth; // force layout flush so opacity:1 is committed
+    _infScreenFade = 0;
+    _infRotSpeed = 0;
+    _infSymbols.forEach((s) => { s.opacity = 0; });
+    infWhiteout.style.transition = 'opacity 750ms ease-out';
+    infWhiteout.style.opacity = '0';
+  });
+  t += 850;
+
+  _playRevealTail(cfg, t, onDone);
+}
+
+// ---------------------------------------------------------------------------
+// Cosmic special cutscene — galaxy, stars, nebula
+// ---------------------------------------------------------------------------
+function _playCosmicCutscene(rank, onDone) {
+  const cfg = CUTSCENE_CONFIG[rank.name];
+  if (!cfg) { onDone(); return; }
+
+  _currentRankName = rank.name;
+  _currentCfg = cfg;
+  _dom.rankName.textContent = `${rank.emoji || ''} ${rank.name}`;
+  _dom.subtitle.textContent = cfg.subtitle || '';
+  _resetSpecialCutsceneDOM(cfg);
+
+  // ── Build DOM elements ──────────────────────────────────────────────────
+  const introText = document.createElement('div');
+  introText.className = 'cosmic-intro-text';
+  introText.textContent = '"you have reached beyond the stars"';
+  _dom.overlay.appendChild(introText);
+
+  const galaxyWrap = document.createElement('div');
+  galaxyWrap.className = 'cosmic-galaxy-wrap';
+  const galaxyDisc = document.createElement('div');
+  galaxyDisc.className = 'cosmic-galaxy-disc';
+  galaxyWrap.appendChild(galaxyDisc);
+  _dom.overlay.appendChild(galaxyWrap);
+
+  const cosmicWhiteout = document.createElement('div');
+  cosmicWhiteout.className = 'cosmic-whiteout';
+  _dom.overlay.appendChild(cosmicWhiteout);
+
+  function _cleanup() {
+    introText.remove(); galaxyWrap.remove();
+    cosmicWhiteout.remove();
+    _customCanvasDraw = null;
+  }
+  _pendingCleanup = _cleanup;
+
+  // ── Canvas: starfield scrolling toward edges (space-travel feel) ────────
+  let _cosmicStarPhase = 'drift'; // 'drift' → 'travel'
+  let _cosmicTravelSpeed = 0;
+
+  _customCanvasDraw = function(ctx, canvas) {
+    if (_cosmicStarPhase !== 'travel') return;
+    const cx = canvas.width  / 2;
+    const cy = canvas.height / 2;
+    // Add radial velocity boost to each particle (space-warp streaks)
+    for (const p of _particles) {
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      p.vx += (dx / dist) * _cosmicTravelSpeed;
+      p.vy += (dy / dist) * _cosmicTravelSpeed;
+    }
+  };
+
+  function _spawnStarfield() {
+    const cw = (_canvas && _canvas.width)  || window.innerWidth;
+    const ch = (_canvas && _canvas.height) || window.innerHeight;
+    for (let i = 0; i < 160; i++) {
+      _particles.push({
+        x: Math.random() * cw, y: Math.random() * ch,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        size: 1 + Math.random() * 2.5,
+        color: _randomColor(['#ffffff', '#ddddff', '#ffeecc', '#aaccff']),
+        opacity: 0.1 + Math.random() * 0.6,
+        life: 1, decay: 0.0001 + Math.random() * 0.00015,
+        type: 'drift',
+      });
+    }
+  }
+
+  _startParticleLoop();
+  _playSound(cfg.soundType, cfg.level);
+
+  // Stars fade in
+  _after(80, () => {
+    _particlePhase = 'drift';
+    _spawnStarfield();
+  });
+
+  let t = 0;
+
+  // Phase 1: Starfield visible
+  t = 500;
+
+  // Phase 2: Intro text
+  _after(t, () => {
+    introText.style.transition = 'opacity 700ms ease, letter-spacing 700ms ease';
+    introText.style.opacity = '1';
+    introText.style.letterSpacing = '3px';
+  });
+  t += 700 + 1200; // fade-in + hold
+
+  // Text out
+  _after(t, () => {
+    introText.style.transition = 'opacity 550ms ease';
+    introText.style.opacity = '0';
+  });
+  t += 650;
+
+  // Phase 3: Galaxy swirl forms
+  _after(t, () => {
+    galaxyWrap.style.transition = 'opacity 1000ms ease';
+    galaxyWrap.style.opacity = '1';
+    _dom.bgFx.classList.add('cutscene-bg-cosmic');
+    _dom.glow.style.transition = 'opacity 1500ms ease';
+    _dom.glow.style.opacity = '0.35';
+  });
+  t += 1100;
+
+  // Phase 4: Stars begin space-travel outward + galaxy spins faster
+  _after(t, () => {
+    _cosmicStarPhase = 'travel';
+    _cosmicTravelSpeed = 0.04;
+    galaxyDisc.classList.add('cosmic-galaxy-fast');
+    _dom.glow.style.transition = 'opacity 1200ms ease';
+    _dom.glow.style.opacity = '0.65';
+  });
+  t += 600;
+
+  _after(t, () => { _cosmicTravelSpeed = 0.12; });
+  t += 500;
+
+  // Phase 5: Galaxy collapses into burst
+  _after(t, () => {
+    _cosmicTravelSpeed = 0.3;
+    galaxyWrap.style.transition = 'opacity 400ms ease, transform 400ms ease';
+    galaxyWrap.style.transform = 'translate(-50%, -50%) scale(3)';
+    galaxyWrap.style.opacity = '0';
+    _dom.glow.style.transition = 'opacity 400ms ease';
+    _dom.glow.style.opacity = '1';
+  });
+  t += 500;
+
+  // Phase 6: Flash white
+  _after(t, () => {
+    cosmicWhiteout.style.transition = 'opacity 350ms ease-in';
+    cosmicWhiteout.style.opacity = '1';
+    _dom.bgFx.classList.remove('cutscene-bg-cosmic');
+  });
+  t += 450;
+
+  // Phase 7: Fade to black
+  _after(t, () => {
+    cosmicWhiteout.style.transition = 'opacity 700ms ease-out';
+    cosmicWhiteout.style.opacity = '0';
+    _dom.glow.style.transition = 'opacity 400ms ease';
+    _dom.glow.style.opacity = '0';
+    _cosmicStarPhase = 'drift';
+    _cosmicTravelSpeed = 0;
+  });
+  t += 800;
+
+  _playRevealTail(cfg, t, onDone);
+}
+
+function _playSingleCutscene(rank, onDone) {
+  // Special bespoke cinematic sequences per rank
+  if (rank.name === 'Overlord')       { _playOverlordCutscene(rank, onDone);       return; }
+  if (rank.name === 'Reality Breaker') { _playRealityBreakerCutscene(rank, onDone); return; }
+  if (rank.name === 'Singularity')    { _playSingularityCutscene(rank, onDone);    return; }
+  if (rank.name === 'Infinity')       { _playInfinityCutscene(rank, onDone);       return; }
+  if (rank.name === 'Cosmic')         { _playCosmicCutscene(rank, onDone);         return; }
 
   const cfg = CUTSCENE_CONFIG[rank.name];
   if (!cfg) { onDone(); return; }
@@ -1056,6 +1903,7 @@ function _playSingleCutscene(rank, onDone) {
 function _teardownCutscene() {
   _clearTimeouts();
   _stopParticleLoop();
+  _customCanvasDraw = null;
   _particlePhase = 'idle';
   _currentCfg = null;
   _currentRankName = '';

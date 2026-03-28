@@ -1399,7 +1399,316 @@ header p.subtitle {
   transform-origin: center;
 }
 
-/* ── Overlord Cutscene: Unique Cinematic Sequence ────── */
+/* ── Reality Breaker Cutscene ──────────────────────────── */
+
+/* Ominous intro text — glitches in then out */
+.rb-intro-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  font-size: clamp(1rem, 2.8vw, 1.7rem);
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: 8px;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 20px rgba(255, 0, 68, 0.7), 0 0 50px rgba(0, 255, 255, 0.25);
+  user-select: none;
+  white-space: nowrap;
+}
+
+@keyframes rbTextGlitch {
+  0%,100% { transform: translate(-50%, -50%);                           filter: none; }
+  10%     { transform: translate(calc(-50% + 3px), -50%);               filter: hue-rotate(40deg); }
+  20%     { transform: translate(calc(-50% - 2px), -50%);               filter: hue-rotate(-30deg); }
+  30%     { transform: translate(-50%, calc(-50% + 2px));               filter: none; }
+  40%     { transform: translate(calc(-50% + 1px), calc(-50% - 1px));   filter: hue-rotate(80deg); }
+  55%     { transform: translate(-50%, -50%);                           filter: none; }
+  65%     { transform: translate(calc(-50% - 3px), -50%);               filter: hue-rotate(-50deg); }
+  80%     { transform: translate(calc(-50% + 2px), -50%);               filter: hue-rotate(20deg); }
+}
+
+.rb-text-glitch {
+  animation: rbTextGlitch 0.4s steps(1) infinite;
+}
+
+/* Container for all crack lines */
+.rb-crack-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  overflow: hidden;
+}
+
+/* Individual crack — thin glowing line; width/rotation set by JS */
+.rb-crack {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(200, 220, 255, 0.8) 30%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(200, 220, 255, 0.8) 70%,
+    transparent 100%
+  );
+  box-shadow: 0 0 4px rgba(200, 220, 255, 0.9), 0 0 10px rgba(255, 255, 255, 0.4);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  transform-origin: left center;
+}
+
+/* Once the container gets this class, cracks visually widen */
+.rb-crack-container-active .rb-crack {
+  filter: brightness(1.4) blur(0.3px);
+}
+
+/* ⚡ symbol that appears at the center strike point */
+.rb-bolt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.5);
+  z-index: 16;
+  font-size: clamp(4rem, 13vmin, 8rem);
+  opacity: 0;
+  filter: drop-shadow(0 0 20px rgba(255, 220, 50, 0.9))
+          drop-shadow(0 0 40px rgba(255, 255, 255, 0.7));
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes rbBoltPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(255, 220, 50, 0.9)) drop-shadow(0 0 40px rgba(255, 255, 255, 0.7));
+    transform: translate(-50%, -50%) scale(1.0);
+  }
+  50% {
+    filter: drop-shadow(0 0 45px rgba(255, 220, 50, 1)) drop-shadow(0 0 90px rgba(255, 255, 255, 1))
+            drop-shadow(0 0 130px rgba(150, 200, 255, 0.8));
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+}
+
+.rb-bolt-active {
+  animation: rbBoltPulse 0.5s ease-in-out infinite;
+}
+
+.rb-whiteout {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Singularity Cutscene ──────────────────────────────── */
+
+.sing-intro-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  font-size: clamp(1rem, 2.8vw, 1.7rem);
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: 8px;
+  color: rgba(200, 210, 255, 0.88);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 20px rgba(100, 100, 255, 0.5);
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Wrapper centered on the overlay; ring/hole are anchored to its (0,0) */
+.sing-hole-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  z-index: 14;
+  pointer-events: none;
+  opacity: 0;
+  overflow: visible;
+}
+
+/* Glowing ring around the singularity */
+.sing-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(150, 150, 255, 0.9);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 20px rgba(150, 150, 255, 0.6), 0 0 40px rgba(100, 100, 200, 0.3);
+  transition: width 1.5s ease, height 1.5s ease, box-shadow 1.5s ease;
+}
+
+@keyframes singRingPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(150, 150, 255, 0.6), 0 0 40px rgba(100, 100, 200, 0.3); }
+  50%       { box-shadow: 0 0 50px rgba(180, 180, 255, 1),  0 0 100px rgba(150, 150, 255, 0.6), 0 0 160px rgba(100, 100, 200, 0.3); }
+}
+
+.sing-ring-pulse {
+  animation: singRingPulse 1.2s ease-in-out infinite;
+}
+
+/* Dark interior of the singularity */
+.sing-hole {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, #000000 60%, rgba(10, 0, 20, 0.85) 100%);
+  transform: translate(-50%, -50%);
+  transition: width 1.5s ease, height 1.5s ease;
+}
+
+/* Tiny bright point the singularity collapses into */
+.sing-collapse-point {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 20px #fff, 0 0 50px #aaccff, 0 0 100px #ffffff;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 16;
+}
+
+.sing-whiteout {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Infinity Cutscene ─────────────────────────────────── */
+
+.inf-intro-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  font-size: clamp(1rem, 2.8vw, 1.7rem);
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: 8px;
+  color: rgba(255, 220, 130, 0.88);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.inf-whiteout {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Cosmic Cutscene ──────────────────────────────────── */
+
+.cosmic-intro-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  font-size: clamp(1rem, 2.8vw, 1.7rem);
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: 8px;
+  color: rgba(200, 180, 255, 0.88);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 20px rgba(120, 50, 255, 0.5);
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Wrapper centred on the overlay */
+.cosmic-galaxy-wrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Softly blurred conic disc — spun by JS-applied CSS class */
+.cosmic-galaxy-disc {
+  width: clamp(220px, 42vmin, 440px);
+  height: clamp(220px, 42vmin, 440px);
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 102,   0, 0.4),
+    rgba(153,   0, 255, 0.4),
+    rgba(  0, 204, 255, 0.35),
+    rgba(255,   0, 204, 0.35),
+    rgba(255, 255,  50, 0.25),
+    rgba(255, 102,   0, 0.4)
+  );
+  filter: blur(10px);
+  transform-origin: center;
+}
+
+@keyframes cosmicGalaxySpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes cosmicGalaxyFast {
+  from { transform: rotate(0deg)   scale(1.0); }
+  to   { transform: rotate(360deg) scale(1.6); }
+}
+
+.cosmic-galaxy-disc {
+  animation: cosmicGalaxySpin 7s linear infinite;
+}
+
+.cosmic-galaxy-fast {
+  animation: cosmicGalaxyFast 1.2s linear infinite;
+}
+
+.cosmic-whiteout {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* Ominous intro text: fades in with letters converging (8px → 4px), then fades out */
 .overlord-intro-text {
