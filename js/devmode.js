@@ -207,6 +207,19 @@ document.addEventListener('DOMContentLoaded', () => {
     multiRollBtn.addEventListener('click', devTriggerRoll);
   }
 
+  // Dev button — opens passcode prompt (or re-shows panel if already active)
+  const devBtn = document.getElementById('dev-btn');
+  if (devBtn) {
+    devBtn.addEventListener('click', () => {
+      if (isDevMode) {
+        showDevPanel();
+      } else {
+        const passcode = prompt('🛠 Enter Dev Mode passcode:');
+        if (passcode !== null) enableDevMode(passcode.trim());
+      }
+    });
+  }
+
   // Guaranteed rare toggle
   const rareToggle = document.getElementById('dev-guaranteed-rare');
   if (rareToggle) {
