@@ -23,6 +23,48 @@ const SPECIAL_COLOR_FALLBACKS = {
 };
 
 // ---------------------------------------------------------------------------
+// Rarity-based animation system
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps each of the top-10 rarest rank names to an animation level (1–10).
+ * Level 1 = Immortal (least rare of the top 10), 10 = Reality Breaker (rarest).
+ */
+const ANIMATION_RANK_LEVELS = {
+  'Immortal':        1,
+  'Eternal':         2,
+  'Celestial':       3,
+  'Transcendent':    4,
+  'Ruler':           5,
+  'Overlord':        6,
+  'Cosmic':          7,
+  'Infinity':        8,
+  'Singularity':     9,
+  'Reality Breaker': 10,
+};
+
+/** Build-up hold duration (ms) before the rank name is revealed, indexed by level 0–10. */
+const BUILDUP_DELAY_MS = [0, 0, 0, 0, 0, 0, 400, 600, 900, 1200, 1600];
+
+/** Entrance animation duration (ms), indexed by level 0–10. */
+const ENTER_DURATION_MS = [400, 500, 700, 1000, 1300, 1600, 2000, 2400, 2800, 3200, 3600];
+
+/** Screen-shake animation duration (ms) for levels 8–10 (must match CSS). */
+const SCREEN_SHAKE_DURATION_MS = [0, 0, 0, 0, 0, 0, 0, 0, 500, 700, 900];
+
+/** Number of sparkle particles spawned per level (0 for levels below 5). */
+const PARTICLE_COUNTS = [0, 0, 0, 0, 0, 5, 7, 10, 14, 18, 22];
+
+/** Base opacity for the background flash overlay (scales with level above 6). */
+const FLASH_BASE_OPACITY        = 0.08;
+const FLASH_OPACITY_INCREMENT   = 0.04;
+const FLASH_MIN_LEVEL           = 6;
+
+/** Particle animation duration: base + level × multiplier (seconds). */
+const PARTICLE_BASE_DUR         = 0.5;
+const PARTICLE_DUR_PER_LEVEL    = 0.12;
+
+// ---------------------------------------------------------------------------
 // Cached DOM references (populated on DOMContentLoaded)
 // ---------------------------------------------------------------------------
 const UI = {
@@ -162,6 +204,136 @@ function createRollCard(result) {
 }
 
 /**
+ * Returns animation level (1–10) for a rank name, or 0 for non-rare ranks.
+ * @param {string} rankName
+ * @returns {number}
+ */
+function getAnimationLevel(rankName) {
+  return ANIMATION_RANK_LEVELS[rankName] || 0;
+}
+
+/**
+ * Trigger a brief screen-shake on the page wrapper for top-3 ranks (levels 8–10).
+ * @param {number} level – animation level (8, 9, or 10)
+ */
+function triggerScreenShake(level) {
+  const wrapper = document.querySelector('.wrapper');
+  if (!wrapper) return;
+  const cls = `screen-shake-${level}`;
+  wrapper.classList.remove('screen-shake-8', 'screen-shake-9', 'screen-shake-10');
+  void wrapper.offsetWidth; // reflow so re-adding the same class restarts the animation
+  wrapper.classList.add(cls);
+  setTimeout(() => wrapper.classList.remove(cls), SCREEN_SHAKE_DURATION_MS[level]);
+}
+
+/**
+ * Flash a translucent colour overlay across the viewport for top-5 ranks (levels 6–10).
+ * Intensity scales with level.
+ * @param {string} color – CSS colour string
+ * @param {number} level – animation level (6–10)
+ */
+function triggerBackgroundFlash(color, level) {
+  let overlay = document.getElementById('rare-flash-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'rare-flash-overlay';
+    document.body.appendChild(overlay);
+  }
+  const maxOpacity = (FLASH_BASE_OPACITY + (level - FLASH_MIN_LEVEL) * FLASH_OPACITY_INCREMENT).toFixed(2);
+  overlay.style.backgroundColor = color;
+  overlay.style.setProperty('--flash-max', maxOpacity);
+  overlay.classList.remove('flash-active');
+  void overlay.offsetWidth; // reflow to restart animation
+  overlay.classList.add('flash-active');
+}
+
+/**
+ * Spawn animated sparkle particles flying outward from the centre of a card.
+ * @param {HTMLElement} cardEl – card element to attach particles to
+ * @param {string}      color  – particle colour
+ * @param {number}      level  – animation level (5–10)
+ */
+function spawnParticles(cardEl, color, level) {
+  const count  = PARTICLE_COUNTS[level] || 0;
+  const baseDur = PARTICLE_BASE_DUR + level * PARTICLE_DUR_PER_LEVEL;
+
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('span');
+    p.className = 'rank-particle';
+    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
+    const dist  = 50 + Math.random() * 70 * (level / 10);
+    p.style.setProperty('--px', `${(Math.cos(angle) * dist).toFixed(1)}px`);
+    p.style.setProperty('--py', `${(Math.sin(angle) * dist).toFixed(1)}px`);
+    p.style.backgroundColor = color;
+    const size = 3 + Math.random() * 4;
+    p.style.width  = `${size.toFixed(1)}px`;
+    p.style.height = `${size.toFixed(1)}px`;
+    const dur   = baseDur + Math.random() * 0.4;
+    const delay = Math.random() * 0.15;
+    p.style.animation = `particleFly ${dur.toFixed(2)}s ease-out ${delay.toFixed(2)}s forwards`;
+    cardEl.appendChild(p);
+    setTimeout(() => p.remove(), (dur + delay + 0.35) * 1000);
+  }
+}
+
+/**
+ * Apply a rarity-based entrance animation to a freshly-mounted roll card.
+ *
+ * - Levels 1–5:  direct entrance animation with increasing intensity
+ * - Levels 6–10: build-up pulse (showing ???) then a dramatic reveal
+ * - Levels 6–10: background flash on reveal
+ * - Levels 8–10: screen shake on reveal
+ * - Levels 5–10: sparkle particles at entrance
+ *
+ * Uses inline style.animation to override any concurrent fx-card-* class
+ * animations during the entrance; the class animations resume automatically
+ * once the inline style is cleared.
+ *
+ * @param {HTMLElement} cardEl  – the roll-result card element (already in DOM)
+ * @param {object}      result  – rank object from RANKS
+ */
+function applyRarityAnimation(cardEl, result) {
+  const level = getAnimationLevel(result.name);
+  if (level === 0) {
+    cardEl.classList.add('roll-animate');
+    return;
+  }
+
+  const rankColor = SPECIAL_COLOR_FX.includes(result.color)
+    ? SPECIAL_COLOR_FALLBACKS[result.color]
+    : result.color;
+  const enterDurMs = ENTER_DURATION_MS[level];
+  const easing     = 'cubic-bezier(0.17, 0.67, 0.83, 0.67)';
+
+  /** Start the entrance animation plus associated screen effects. */
+  const startEntrance = () => {
+    cardEl.style.animation = `enterLevel${level} ${enterDurMs}ms ${easing} forwards`;
+    spawnParticles(cardEl, rankColor, level);
+    if (level >= 6) triggerBackgroundFlash(rankColor, level);
+    if (level >= 8) triggerScreenShake(level);
+    // Clear inline style when the animation ends so fx-card-* classes resume
+    setTimeout(() => { cardEl.style.animation = ''; }, enterDurMs);
+  };
+
+  if (level <= 5) {
+    // Immediate entrance — no build-up phase
+    cardEl.style.animation = `enterLevel${level} ${enterDurMs}ms ${easing} forwards`;
+    if (level >= 5) spawnParticles(cardEl, rankColor, level);
+    setTimeout(() => { cardEl.style.animation = ''; }, enterDurMs);
+  } else {
+    // Build-up phase: pulse with ??? then reveal the actual rank name
+    const nameEl   = cardEl.querySelector('.roll-result-name');
+    const fullText = nameEl.textContent;
+    nameEl.textContent = '???';
+    cardEl.style.animation = 'buildUpPulse 0.45s ease-in-out infinite';
+    setTimeout(() => {
+      nameEl.textContent = fullText;
+      startEntrance();
+    }, BUILDUP_DELAY_MS[level]);
+  }
+}
+
+/**
  * Show all roll results from the current batch, one card per result.
  *
  * @param {object[]} rolledRanks – array of rank objects from this roll batch
@@ -175,10 +347,8 @@ function renderRollResult(rolledRanks) {
   rolledRanks.forEach((result) => {
     const card = createRollCard(result);
     UI.rollResultContainer.appendChild(card);
-    // Trigger roll-pop animation after the element is in the DOM
-    requestAnimationFrame(() => {
-      card.classList.add('roll-animate');
-    });
+    // Trigger roll animation after the element is in the DOM
+    requestAnimationFrame(() => applyRarityAnimation(card, result));
   });
 }
 
