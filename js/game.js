@@ -85,11 +85,10 @@ function doRoll() {
   const rolledRanks = [];
 
   for (let i = 0; i < count; i++) {
-    const rank = rollRank(player.upgrades.luck);
-    const rankIndex = RANKS.findIndex((r) => r.id === rank.id);
+    const rank = rollItem(player.upgrades.luck);
 
-    // Apply bonus multiplier to Rare and above (index >= 2)
-    const multiplier = rankIndex >= 2 ? player.bonusMultiplier : 1;
+    // Apply bonus multiplier to Rare and above (rarityLevel >= 4)
+    const multiplier = rank.rarityLevel >= 4 ? player.bonusMultiplier : 1;
     const value = Math.ceil(rank.value * multiplier);
 
     inventory.addRank(rank, value);
